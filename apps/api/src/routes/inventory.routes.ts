@@ -384,3 +384,100 @@ inventoryRouter.post(
     }
   }
 );
+
+// GET /inventory/expiry-clearance-hints (EXP-007: Expiry Clearance & Discount Strategy Hints)
+inventoryRouter.get('/expiry-clearance-hints', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const storeId = req.user!.storeId;
+    const isOwner = req.user!.accountType === 'OWNER';
+    const now = new Date();
+    const ninetyDaysFuture = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    const result = await req.db.query<{
+      id: string;
+      product_id: string;
+      brand_name: string;
+      generic_name: string;
+      strength: string;
+      dosage_form: string;
+      batch_number: string;
+      expiry_date: string;
+      mrp_paise: number;
+      sale_rate_paise: number;
+      purchase_rate_paise: number;
+      quantity: number;
+      rack_location: string;
+    }>(
+      `SELECT b.id, b.product_id, p.brand_name, p.generic_name, p.strength, p.dosage_form,
+              b.batch_number, b.expiry_date, b.mrp_paise, b.sale_rate_paise,
+              b.purchase_rate_paise, b.quantity, b.rack_location
+       FROM batches b
+       JOIN products p ON b.product_id = p.id
+       WHERE b.store_id = $1 AND b.quantity > 0 AND b.expiry_date <= $2
+       ORDER BY b.expiry_date ASC`,
+      [storeId, ninetyDaysFuture]
+    );
+
+    const suggestions = result.rows.map((b) => {
+      const daysUntilExpiry = getDaysUntilExpiry(b.expiry_date, now);
+      let urgency: 'CRITICAL' | 'HIGH' | 'MODERATE' = 'MODERATE';
+      let recommendedDiscountPercent = 10;
+      let actionLabel = 'Prioritize in FEFO Dispensing';
+      let strategy = 'Place at front of dispensary counter to ensure dispensing on immediate prescriptions.';
+
+      if (daysUntilExpiry <= 0) {
+        urgency = 'CRITICAL';
+        recommendedDiscountPercent = 0;
+        actionLabel = 'Quarantine & Return / Write Off';
+        strategy = 'Batch has expired. Block sales immediately and file Return to Supplier or write-off.';
+      } else if (daysUntilExpiry <= 30) {
+        urgency = 'CRITICAL';
+        recommendedDiscountPercent = 25;
+        actionLabel = 'Fast Clearance Discount';
+        strategy = 'Offer 25% clearance discount or initiate supplier credit note return within 7 days.';
+      } else if (daysUntilExpiry <= 60) {
+        urgency = 'HIGH';
+        recommendedDiscountPercent = 15;
+        actionLabel = 'Promotional Clearance Hint';
+        strategy = 'Suggest 15% discount for chronic disease patients purchasing monthly supplies.';
+      }
+
+      const totalMrpValuePaise = Number(b.quantity) * Number(b.mrp_paise);
+      const totalCostValuePaise = Number(b.quantity) * Number(b.purchase_rate_paise || 0);
+
+      return {
+        batchId: b.id,
+        productId: b.product_id,
+        brandName: b.brand_name,
+        genericName: b.generic_name,
+        strength: b.strength,
+        dosageForm: b.dosage_form,
+        batchNumber: b.batch_number,
+        expiryDate: b.expiry_date,
+        quantity: Number(b.quantity),
+        mrpPaise: Number(b.mrp_paise),
+        purchaseRatePaise: isOwner ? Number(b.purchase_rate_paise) : undefined,
+        daysUntilExpiry,
+        urgency,
+        recommendedDiscountPercent,
+        actionLabel,
+        strategy,
+        totalMrpValuePaise,
+        totalCostValuePaise: isOwner ? totalCostValuePaise : undefined,
+      };
+    });
+
+    const totalCapitalAtRiskPaise = suggestions.reduce((s, r) => s + (r.totalCostValuePaise || 0), 0);
+    const totalMrvAtRiskPaise = suggestions.reduce((s, r) => s + r.totalMrpValuePaise, 0);
+
+    res.json({
+      asOf: now.toISOString(),
+      totalBatchesAtRisk: suggestions.length,
+      totalCapitalAtRiskPaise: isOwner ? totalCapitalAtRiskPaise : undefined,
+      totalMrvAtRiskPaise,
+      suggestions,
+    });
+  } catch (err) {
+    next(err);
+  }
+});

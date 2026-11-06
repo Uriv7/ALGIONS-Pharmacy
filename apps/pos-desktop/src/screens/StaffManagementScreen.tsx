@@ -68,8 +68,8 @@ export const StaffManagementScreen: React.FC = () => {
   };
 
   return (
-    <main className="flex-1 flex flex-col bg-slate-100 overflow-hidden p-6 select-none">
-      <div className="flex items-center justify-between mb-4">
+    <main className="flex-1 flex flex-col bg-slate-100 overflow-y-auto lg:overflow-hidden p-3 sm:p-6 select-none">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div>
           <h1 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
             Staff Management & Audit Trail
@@ -82,7 +82,7 @@ export const StaffManagementScreen: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="bg-white border border-slate-200 rounded-lg p-0.5 flex">
             <button
               onClick={() => setActiveTab('STAFF')}
@@ -121,8 +121,8 @@ export const StaffManagementScreen: React.FC = () => {
       </div>
 
       {activeTab === 'STAFF' ? (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex-1 overflow-y-auto">
-          <table className="w-full text-left border-collapse text-xs">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex-1 overflow-x-auto overflow-y-auto">
+          <table className="w-full min-w-[650px] text-left border-collapse text-xs">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase text-[10px]">
                 <th className="py-2.5 px-4">Name / Username</th>
@@ -188,8 +188,8 @@ export const StaffManagementScreen: React.FC = () => {
             </span>
           </div>
 
-          <div className="flex-1 overflow-y-auto">
-            <table className="w-full text-left border-collapse text-xs">
+          <div className="flex-1 overflow-x-auto overflow-y-auto">
+            <table className="w-full min-w-[700px] text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase text-[10px]">
                   <th className="py-2.5 px-4">Timestamp</th>

@@ -9,6 +9,7 @@ import {
   Building,
   CheckCircle,
   AlertCircle,
+  Clock,
 } from 'lucide-react';
 import { formatPaiseToINR } from '@algions/domain';
 import { api } from '../api/client.js';
@@ -20,6 +21,8 @@ interface SupplierManagementScreenProps {
 
 export const SupplierManagementScreen: React.FC<SupplierManagementScreenProps> = ({ user }) => {
   const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [ageingData, setAgeingData] = useState<any | null>(null);
+  const [activeTab, setActiveTab] = useState<'DIRECTORY' | 'AGEING'>('DIRECTORY');
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -43,8 +46,12 @@ export const SupplierManagementScreen: React.FC<SupplierManagementScreenProps> =
   const fetchSuppliers = async () => {
     setLoading(true);
     try {
-      const res = await api.getSuppliersList();
+      const [res, ageRes] = await Promise.all([
+        api.getSuppliersList(),
+        api.getOutstandingAgeing().catch(() => ({ suppliers: null })),
+      ]);
       setSuppliers(res.suppliers || []);
+      setAgeingData(ageRes?.suppliers || null);
     } catch (err) {
       console.error(err);
     } finally {
@@ -119,9 +126,9 @@ export const SupplierManagementScreen: React.FC<SupplierManagementScreenProps> =
   );
 
   return (
-    <div className="flex-1 flex flex-col p-6 bg-slate-100 overflow-hidden select-none">
+    <div className="flex-1 flex flex-col p-3 sm:p-6 bg-slate-100 overflow-y-auto lg:overflow-hidden select-none">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-4">
         <div>
           <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
             <Truck className="w-5 h-5 text-teal-600" />
@@ -132,7 +139,7 @@ export const SupplierManagementScreen: React.FC<SupplierManagementScreenProps> =
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <div className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg shadow-sm flex items-center gap-2">
             <span className="text-[11px] font-semibold text-slate-500 uppercase">Total Payables:</span>
             <span className="text-sm font-black text-red-600">
@@ -140,7 +147,7 @@ export const SupplierManagementScreen: React.FC<SupplierManagementScreenProps> =
             </span>
           </div>
 
-          <div className="relative w-64">
+          <div className="relative flex-1 sm:w-64">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
             <input
               type="text"
@@ -180,10 +187,173 @@ export const SupplierManagementScreen: React.FC<SupplierManagementScreenProps> =
         </div>
       )}
 
-      {/* Supplier Table */}
-      <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-        <div className="overflow-y-auto flex-1">
-          <table className="w-full text-xs text-left">
+      {/* Tab Switcher */}
+      <div className="flex items-center gap-2 mb-3">
+        <button
+          onClick={() => setActiveTab('DIRECTORY')}
+          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold transition shadow-sm ${
+            activeTab === 'DIRECTORY'
+              ? 'bg-teal-600 text-white'
+              : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+          }`}
+        >
+          <Truck className="w-3.5 h-3.5" />
+          <span>Supplier Directory</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('AGEING')}
+          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold transition shadow-sm ${
+            activeTab === 'AGEING'
+              ? 'bg-teal-600 text-white'
+              : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+          }`}
+        >
+          <Clock className="w-3.5 h-3.5" />
+          <span>Trade Payables Ageing (ACC-006)</span>
+          {ageingData?.rows?.length > 0 && (
+            <span className="ml-1 px-1.5 py-0.2 bg-red-100 text-red-800 rounded-full text-[10px]">
+              {ageingData.rows.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {activeTab === 'AGEING' ? (
+        /* Trade Payables Ageing View (ACC-006) */
+        <div className="flex-1 flex flex-col gap-4 overflow-hidden">
+          {ageingData && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
+                <span className="text-[11px] font-semibold text-emerald-600 uppercase tracking-wider">
+                  0 – 30 Days (Current)
+                </span>
+                <div className="text-lg font-black text-slate-900 mt-1">
+                  {formatPaiseToINR(ageingData.buckets.days0_30Paise)}
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5">Within distributor invoice window</div>
+              </div>
+
+              <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
+                <span className="text-[11px] font-semibold text-amber-600 uppercase tracking-wider">
+                  31 – 60 Days (Moderate)
+                </span>
+                <div className="text-lg font-black text-amber-700 mt-1">
+                  {formatPaiseToINR(ageingData.buckets.days31_60Paise)}
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5">Payment due this cycle</div>
+              </div>
+
+              <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
+                <span className="text-[11px] font-semibold text-orange-600 uppercase tracking-wider">
+                  61 – 90 Days (Overdue)
+                </span>
+                <div className="text-lg font-black text-orange-700 mt-1">
+                  {formatPaiseToINR(ageingData.buckets.days61_90Paise)}
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5">Distributor credit hold risk</div>
+              </div>
+
+              <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
+                <span className="text-[11px] font-semibold text-rose-600 uppercase tracking-wider">
+                  90+ Days (Critical)
+                </span>
+                <div className="text-lg font-black text-rose-700 mt-1">
+                  {formatPaiseToINR(ageingData.buckets.days90PlusPaise)}
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5">Action required immediately</div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+            <div className="overflow-x-auto overflow-y-auto flex-1">
+              <table className="w-full min-w-[760px] text-xs text-left">
+                <thead className="bg-slate-100 text-slate-600 font-semibold border-b border-slate-200 sticky top-0 z-10">
+                  <tr>
+                    <th className="py-2.5 px-4">Distributor Name</th>
+                    <th className="py-2.5 px-3">GSTIN</th>
+                    <th className="py-2.5 px-3 text-center">Credit Terms</th>
+                    <th className="py-2.5 px-3">Oldest Purchase Bill</th>
+                    <th className="py-2.5 px-3 text-center">Overdue Days</th>
+                    <th className="py-2.5 px-3 text-center">Ageing Bracket</th>
+                    <th className="py-2.5 px-3 text-right">Outstanding Payable</th>
+                    <th className="py-2.5 px-4 text-center">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {!ageingData?.rows?.length ? (
+                    <tr>
+                      <td colSpan={8} className="py-12 text-center text-slate-400">
+                        <CheckCircle className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+                        <div className="text-xs font-bold text-slate-700">No overdue trade payables</div>
+                        <div className="text-[11px] text-slate-400 mt-0.5">All distributor accounts are fully reconciled.</div>
+                      </td>
+                    </tr>
+                  ) : (
+                    ageingData.rows.map((row: any) => (
+                      <tr key={row.id} className="hover:bg-slate-50 transition">
+                        <td className="py-2.5 px-4 font-bold text-slate-900">{row.name}</td>
+                        <td className="py-2.5 px-3 font-mono text-slate-600">{row.gstin}</td>
+                        <td className="py-2.5 px-3 text-center font-bold text-slate-700">
+                          {row.creditPeriodDays} days
+                        </td>
+                        <td className="py-2.5 px-3 font-mono text-slate-500">
+                          {row.oldestPurchaseDate}
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                              row.isOverdue
+                                ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                                : 'bg-slate-100 text-slate-700'
+                            }`}
+                          >
+                            {row.ageDays} days {row.isOverdue ? '(OVERDUE)' : ''}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              row.bucket === '90_PLUS'
+                                ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                                : row.bucket === '61_90'
+                                ? 'bg-orange-100 text-orange-800 border border-orange-300'
+                                : row.bucket === '31_60'
+                                ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                            }`}
+                          >
+                            {row.bucket.replace('_', '–')} Days
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-black text-rose-700">
+                          {formatPaiseToINR(row.outstandingPaise)}
+                        </td>
+                        <td className="py-2.5 px-4 text-center">
+                          <button
+                            onClick={() => {
+                              setPaySupplier({ id: row.id, name: row.name });
+                              setPayAmount((row.outstandingPaise / 100).toFixed(2));
+                            }}
+                            className="px-2.5 py-1 bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 rounded text-[11px] font-bold transition"
+                          >
+                            Pay Supplier
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* Supplier Table */
+        <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+        <div className="overflow-x-auto overflow-y-auto flex-1">
+          <table className="w-full min-w-[760px] text-xs text-left">
             <thead className="bg-slate-100 text-slate-600 font-semibold border-b border-slate-200 sticky top-0 z-10">
               <tr>
                 <th className="py-2.5 px-4">Supplier / Distributor Name</th>
@@ -258,6 +428,7 @@ export const SupplierManagementScreen: React.FC<SupplierManagementScreenProps> =
           </table>
         </div>
       </div>
+      )}
 
       {/* Modal: Add Supplier */}
       {showAddModal && (

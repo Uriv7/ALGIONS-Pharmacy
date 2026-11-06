@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { api } from '../api/client.js';
 import { AuthSessionUser } from '@algions/contracts';
+import { BarcodeLabelPrintDialog } from '../components/dialogs/BarcodeLabelPrintDialog.js';
 
 interface MedicineMasterScreenProps {
   user: AuthSessionUser;
@@ -31,6 +32,7 @@ export const MedicineMasterScreen: React.FC<MedicineMasterScreenProps> = ({ user
   // Modal State
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any | null>(null);
+  const [labelProduct, setLabelProduct] = useState<any | null>(null);
 
   // Bulk CSV Import / Export State (MED-008)
   const [showImportModal, setShowImportModal] = useState(false);
@@ -263,9 +265,9 @@ export const MedicineMasterScreen: React.FC<MedicineMasterScreenProps> = ({ user
   };
 
   return (
-    <div className="flex-1 flex flex-col p-6 bg-slate-100 overflow-hidden select-none">
+    <div className="flex-1 flex flex-col p-3 sm:p-6 bg-slate-100 overflow-y-auto lg:overflow-hidden select-none">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-4">
         <div>
           <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
             <Pill className="w-5 h-5 text-teal-600" />
@@ -276,8 +278,8 @@ export const MedicineMasterScreen: React.FC<MedicineMasterScreenProps> = ({ user
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="relative w-64">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 sm:w-64">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
             <input
               type="text"
@@ -344,8 +346,8 @@ export const MedicineMasterScreen: React.FC<MedicineMasterScreenProps> = ({ user
 
       {/* Catalog Table */}
       <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-        <div className="overflow-y-auto flex-1">
-          <table className="w-full text-xs text-left">
+        <div className="overflow-x-auto overflow-y-auto flex-1">
+          <table className="w-full min-w-[800px] text-xs text-left">
             <thead className="bg-slate-100 text-slate-600 font-semibold border-b border-slate-200 sticky top-0 z-10">
               <tr>
                 <th className="py-2.5 px-4">Brand & Strength</th>
@@ -410,6 +412,13 @@ export const MedicineMasterScreen: React.FC<MedicineMasterScreenProps> = ({ user
                     {user.accountType === 'OWNER' && (
                       <td className="py-2.5 px-4 text-center">
                         <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => setLabelProduct(p)}
+                            className="p-1 rounded hover:bg-teal-50 text-slate-500 hover:text-teal-700"
+                            title="Print Barcode & Shelf Label (PRN-006)"
+                          >
+                            <Barcode className="w-3.5 h-3.5" />
+                          </button>
                           <button
                             onClick={() => handleOpenEdit(p)}
                             className="p-1 rounded hover:bg-slate-200 text-slate-500 hover:text-teal-700"
@@ -748,6 +757,19 @@ export const MedicineMasterScreen: React.FC<MedicineMasterScreenProps> = ({ user
             </div>
           </div>
         </div>
+      )}
+      {/* Barcode & Shelf Label Print Dialog (PRN-006) */}
+      {labelProduct && (
+        <BarcodeLabelPrintDialog
+          product={{
+            brandName: labelProduct.brandName,
+            genericName: labelProduct.genericName,
+            strength: labelProduct.strength,
+            barcode: labelProduct.barcodes?.[0] || '8901031045022',
+            rackLocation: labelProduct.rackLocation,
+          }}
+          onClose={() => setLabelProduct(null)}
+        />
       )}
     </div>
   );

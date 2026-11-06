@@ -164,7 +164,7 @@ export const PurchaseEntryScreen: React.FC<PurchaseEntryScreenProps> = ({ onSucc
   };
 
   return (
-    <div className="flex-1 flex flex-col p-6 bg-slate-100 overflow-y-auto select-none">
+    <div className="flex-1 flex flex-col p-3 sm:p-6 bg-slate-100 overflow-y-auto select-none">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-xl font-bold text-slate-800">Purchase Goods Receipt (U1)</h2>
@@ -190,7 +190,7 @@ export const PurchaseEntryScreen: React.FC<PurchaseEntryScreenProps> = ({ onSucc
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Header details card */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm grid grid-cols-4 gap-4 text-xs">
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 text-xs">
           <div>
             <label className="block font-semibold text-slate-700 mb-1">
               Distributor / Supplier <span className="text-red-500">*</span>
@@ -251,7 +251,7 @@ export const PurchaseEntryScreen: React.FC<PurchaseEntryScreenProps> = ({ onSucc
         </div>
 
         {/* Lines Grid Card */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
           <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
             <h3 className="font-bold text-slate-800 text-xs">Purchased Medicines & Batches</h3>
             <button
@@ -264,7 +264,7 @@ export const PurchaseEntryScreen: React.FC<PurchaseEntryScreenProps> = ({ onSucc
             </button>
           </div>
 
-          <table className="w-full text-xs text-left">
+          <table className="w-full min-w-[760px] text-xs text-left">
             <thead className="bg-slate-100 text-slate-600 font-semibold border-b border-slate-200">
               <tr>
                 <th className="py-2 px-3">Medicine</th>

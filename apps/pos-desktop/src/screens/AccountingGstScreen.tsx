@@ -129,9 +129,9 @@ export const AccountingGstScreen: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col p-6 bg-slate-100 overflow-hidden select-none">
+    <div className="flex-1 flex flex-col p-3 sm:p-6 bg-slate-100 overflow-y-auto lg:overflow-hidden select-none">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-4">
         <div>
           <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
             <Calculator className="w-5 h-5 text-teal-600" />
@@ -142,9 +142,9 @@ export const AccountingGstScreen: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Tabs */}
-          <div className="bg-white border border-slate-200 rounded-lg p-0.5 flex">
+          <div className="bg-white border border-slate-200 rounded-lg p-0.5 flex flex-wrap gap-1">
             <button
               onClick={() => setActiveTab('GST')}
               className={`px-3 py-1.5 rounded-md text-xs font-bold transition flex items-center gap-1.5 ${
@@ -253,7 +253,7 @@ export const AccountingGstScreen: React.FC = () => {
       {activeTab === 'GST' && gstData && (
         <div className="flex-1 flex flex-col gap-4 overflow-hidden">
           {/* Top GST Metric Cards */}
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
               <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
                 Total Taxable Value
@@ -298,8 +298,8 @@ export const AccountingGstScreen: React.FC = () => {
               <span className="font-mono text-slate-500">Period: {gstData.periodStart} to {gstData.periodEnd}</span>
             </div>
 
-            <div className="overflow-y-auto flex-1">
-              <table className="w-full text-xs text-left">
+            <div className="overflow-x-auto overflow-y-auto flex-1">
+              <table className="w-full min-w-[700px] text-xs text-left">
                 <thead className="bg-slate-100 text-slate-600 font-semibold border-b border-slate-200 sticky top-0 z-10">
                   <tr>
                     <th className="py-2.5 px-4">HSN Code</th>
@@ -359,8 +359,8 @@ export const AccountingGstScreen: React.FC = () => {
             Chronological General Ledger Postings (Double-Entry Balanced)
           </div>
 
-          <div className="overflow-y-auto flex-1">
-            <table className="w-full text-xs text-left">
+          <div className="overflow-x-auto overflow-y-auto flex-1">
+            <table className="w-full min-w-[700px] text-xs text-left">
               <thead className="bg-slate-100 text-slate-600 font-semibold border-b border-slate-200 sticky top-0 z-10">
                 <tr>
                   <th className="py-2.5 px-4">Date / Time</th>
@@ -418,8 +418,8 @@ export const AccountingGstScreen: React.FC = () => {
             Chart of Accounts & Current Balances
           </div>
 
-          <div className="overflow-y-auto flex-1">
-            <table className="w-full text-xs text-left">
+          <div className="overflow-x-auto overflow-y-auto flex-1">
+            <table className="w-full min-w-[700px] text-xs text-left">
               <thead className="bg-slate-100 text-slate-600 font-semibold border-b border-slate-200 sticky top-0 z-10">
                 <tr>
                   <th className="py-2.5 px-4">Account Code</th>
@@ -485,8 +485,8 @@ export const AccountingGstScreen: React.FC = () => {
               </span>
             </div>
 
-            <div className="overflow-y-auto flex-1">
-              <table className="w-full text-xs text-left">
+            <div className="overflow-x-auto overflow-y-auto flex-1">
+              <table className="w-full min-w-[700px] text-xs text-left">
                 <thead className="bg-slate-100 text-slate-600 font-semibold border-b border-slate-200 sticky top-0 z-10">
                   <tr>
                     <th className="py-2.5 px-4">Date</th>
@@ -551,8 +551,8 @@ export const AccountingGstScreen: React.FC = () => {
             </button>
           </div>
 
-          <div className="overflow-y-auto flex-1">
-            <table className="w-full text-xs text-left">
+          <div className="overflow-x-auto overflow-y-auto flex-1">
+            <table className="w-full min-w-[700px] text-xs text-left">
               <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-300 sticky top-0 z-10 text-[11px]">
                 <tr>
                   <th className="py-2.5 px-3">Date</th>
@@ -659,7 +659,7 @@ export const AccountingGstScreen: React.FC = () => {
 
           {/* Metric Highlights */}
           {plData && (
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                 <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
                   Net Taxable Revenue
@@ -731,7 +731,7 @@ export const AccountingGstScreen: React.FC = () => {
                 </div>
               </div>
 
-              <div className="overflow-y-auto flex-1 p-6 space-y-6">
+              <div className="overflow-x-auto overflow-y-auto flex-1 p-3 sm:p-6 space-y-6">
                 {/* SECTION 1: REVENUE */}
                 <div>
                   <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider border-b pb-1 mb-2">
@@ -890,8 +890,8 @@ export const AccountingGstScreen: React.FC = () => {
               </button>
             </div>
 
-            {/* Two Column Balance Sheet */}
-            <div className="flex-1 grid grid-cols-2 gap-4 overflow-hidden">
+            {/* Two Column Balance Sheet (Responsive: stacked on mobile/tablet, side-by-side on desktop) */}
+            <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-4 overflow-y-auto">
               {/* ASSETS COLUMN */}
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
                 <div className="p-3 bg-slate-50 border-b border-slate-200 flex justify-between items-center">

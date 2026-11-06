@@ -350,8 +350,8 @@ export const POSScreen: React.FC<POSScreenProps> = ({
         </div>
       )}
 
-      {/* Main 60/40 Split Content */}
-      <div className="flex-1 flex overflow-hidden">
+      {/* Main 60/40 Split Content (Responsive: stacked on mobile/tablet, side-by-side on desktop) */}
+      <div className="flex-1 flex flex-col xl:flex-row overflow-y-auto xl:overflow-hidden">
         {/* Left 60%: Bill Grid */}
         <BillGrid
           lines={lines}

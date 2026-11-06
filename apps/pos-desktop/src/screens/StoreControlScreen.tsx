@@ -137,9 +137,9 @@ export const StoreControlScreen: React.FC<StoreControlScreenProps> = ({
   };
 
   return (
-    <div className="flex-1 flex flex-col p-6 bg-slate-100 overflow-y-auto select-none space-y-6">
+    <div className="flex-1 flex flex-col p-3 sm:p-6 bg-slate-100 overflow-y-auto select-none space-y-4 sm:space-y-6">
       {/* Top Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
             <Server className="w-5 h-5 text-teal-600" />
@@ -152,7 +152,7 @@ export const StoreControlScreen: React.FC<StoreControlScreenProps> = ({
 
         <button
           onClick={fetchStatusAndDevices}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-sm"
+          className="self-start sm:self-auto flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-sm"
         >
           <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${loading ? 'animate-spin' : ''}`} />
           <span>Refresh Status</span>
@@ -160,7 +160,7 @@ export const StoreControlScreen: React.FC<StoreControlScreenProps> = ({
       </div>
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Card 1: Store Mode */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
@@ -256,8 +256,8 @@ export const StoreControlScreen: React.FC<StoreControlScreenProps> = ({
       </div>
 
       {/* Device Registry (DEV-001, DEV-002, DEV-003) */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
-        <div className="flex items-center justify-between">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
               <Laptop className="w-4 h-4 text-teal-600" />
@@ -270,7 +270,7 @@ export const StoreControlScreen: React.FC<StoreControlScreenProps> = ({
 
           <button
             onClick={() => setShowEnrolModal(true)}
-            className="px-3.5 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition"
+            className="self-start sm:self-auto px-3.5 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Enrol New Counter</span>
@@ -278,7 +278,7 @@ export const StoreControlScreen: React.FC<StoreControlScreenProps> = ({
         </div>
 
         <div className="overflow-x-auto rounded-xl border border-slate-200">
-          <table className="w-full text-xs text-left">
+          <table className="w-full min-w-[750px] text-xs text-left">
             <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
               <tr>
                 <th className="py-2.5 px-4">Device Name</th>

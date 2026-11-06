@@ -56,7 +56,7 @@ export function createApp(db?: IDatabase): express.Express {
   app.use('/returns', posRouter);
   app.use('/purchases', purchasesRouter);
   app.use('/suppliers', purchasesRouter);
-  app.use('/stock', inventoryRouter);
+  app.use(['/stock', '/inventory'], inventoryRouter);
   app.use('/accounting', accountingRouter);
   app.use('/gst', accountingRouter);
   app.use('/customers', accountingRouter);

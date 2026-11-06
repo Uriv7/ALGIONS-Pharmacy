@@ -195,9 +195,9 @@ export const ShiftClosingDialog: React.FC<ShiftClosingDialogProps> = ({ onClose 
           </div>
         ) : (
           /* Drawer Balancing Input Form */
-          <div className="p-6 overflow-y-auto space-y-5">
+          <div className="p-4 sm:p-6 overflow-y-auto space-y-4 sm:space-y-5">
             {/* Summary Cards */}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
                 <div className="text-[10px] font-bold text-slate-400 uppercase">Cashier & Bills</div>
                 <div className="text-sm font-black text-slate-900 mt-1">{summary.cashierName}</div>
@@ -264,7 +264,7 @@ export const ShiftClosingDialog: React.FC<ShiftClosingDialogProps> = ({ onClose 
 
             {/* Variance Bar */}
             <div
-              className={`p-4 rounded-xl border flex items-center justify-between ${
+              className={`p-3 sm:p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
                 variancePaise === 0
                   ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
                   : variancePaise > 0

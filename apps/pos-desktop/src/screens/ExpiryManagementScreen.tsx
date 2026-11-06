@@ -8,6 +8,11 @@ import {
   RefreshCw,
   Boxes,
   ShieldAlert,
+  Sparkles,
+  Percent,
+  TrendingDown,
+  Tag,
+  ArrowRight,
 } from 'lucide-react';
 import { formatPaiseToINR } from '@algions/domain';
 import { api } from '../api/client.js';
@@ -20,8 +25,9 @@ interface ExpiryManagementScreenProps {
 export const ExpiryManagementScreen: React.FC<ExpiryManagementScreenProps> = ({ user }) => {
   const [thresholdDays, setThresholdDays] = useState<number>(90);
   const [data, setData] = useState<{ expired: any[]; nearExpiry: any[]; expiredCount: number; nearExpiryCount: number } | null>(null);
+  const [clearanceData, setClearanceData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'NEAR_EXPIRY' | 'EXPIRED'>('NEAR_EXPIRY');
+  const [activeTab, setActiveTab] = useState<'NEAR_EXPIRY' | 'EXPIRED' | 'CLEARANCE_STRATEGIES'>('NEAR_EXPIRY');
 
   // Adjustment Modal
   const [adjustBatch, setAdjustBatch] = useState<any | null>(null);
@@ -34,8 +40,12 @@ export const ExpiryManagementScreen: React.FC<ExpiryManagementScreenProps> = ({ 
   const fetchExpiryData = async () => {
     setLoading(true);
     try {
-      const res = await api.getExpiryList(thresholdDays);
-      setData(res);
+      const [expRes, clRes] = await Promise.all([
+        api.getExpiryList(thresholdDays),
+        api.getExpiryClearanceHints(),
+      ]);
+      setData(expRes);
+      setClearanceData(clRes);
     } catch (err) {
       console.error(err);
     } finally {
@@ -74,8 +84,8 @@ export const ExpiryManagementScreen: React.FC<ExpiryManagementScreenProps> = ({ 
   const listToShow = activeTab === 'NEAR_EXPIRY' ? data?.nearExpiry || [] : data?.expired || [];
 
   return (
-    <div className="flex-1 flex flex-col p-6 bg-slate-100 overflow-hidden select-none">
-      <div className="flex items-center justify-between mb-4">
+    <div className="flex-1 flex flex-col p-3 sm:p-6 bg-slate-100 overflow-y-auto lg:overflow-hidden select-none">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div>
           <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
             <Calendar className="w-5 h-5 text-amber-600" />
@@ -86,7 +96,7 @@ export const ExpiryManagementScreen: React.FC<ExpiryManagementScreenProps> = ({ 
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {/* Threshold Switcher */}
           <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg p-1 text-xs">
             <Filter className="w-3.5 h-3.5 text-slate-400 ml-1" />
@@ -136,7 +146,7 @@ export const ExpiryManagementScreen: React.FC<ExpiryManagementScreenProps> = ({ 
       )}
 
       {/* Tab Selectors */}
-      <div className="flex gap-2 mb-3">
+      <div className="flex flex-wrap gap-2 mb-3">
         <button
           onClick={() => setActiveTab('NEAR_EXPIRY')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition shadow-sm ${
@@ -160,12 +170,173 @@ export const ExpiryManagementScreen: React.FC<ExpiryManagementScreenProps> = ({ 
           <Trash2 className="w-4 h-4" />
           <span>Expired Batches ({data?.expiredCount || 0})</span>
         </button>
+
+        <button
+          onClick={() => setActiveTab('CLEARANCE_STRATEGIES')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition shadow-sm ${
+            activeTab === 'CLEARANCE_STRATEGIES'
+              ? 'bg-teal-600 text-white'
+              : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+          }`}
+        >
+          <Sparkles className="w-4 h-4 text-amber-300" />
+          <span>Clearance Strategies (EXP-007)</span>
+        </button>
       </div>
 
-      {/* Batches Table */}
-      <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-        <div className="overflow-y-auto flex-1">
-          <table className="w-full text-xs text-left">
+      {activeTab === 'CLEARANCE_STRATEGIES' ? (
+        /* Clearance Strategies & Discount Hints (EXP-007) */
+        <div className="flex-1 flex flex-col gap-4 overflow-hidden">
+          {clearanceData && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                  Batches Approaching Expiry
+                </span>
+                <div className="text-xl font-black text-amber-600 mt-1">
+                  {clearanceData.totalBatchesAtRisk} Batches
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5">
+                  Expiring in next 90 days requiring liquidation
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                  Capital at Risk (Acquisition Cost)
+                </span>
+                <div className="text-xl font-black text-slate-900 mt-1">
+                  {clearanceData.totalCapitalAtRiskPaise !== undefined
+                    ? formatPaiseToINR(clearanceData.totalCapitalAtRiskPaise)
+                    : 'Confidential'}
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5">
+                  Batch acquisition valuation to protect
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                  Total MRP Retail Value
+                </span>
+                <div className="text-xl font-black text-teal-600 mt-1">
+                  {formatPaiseToINR(clearanceData.totalMrvAtRiskPaise || 0)}
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5">
+                  Gross sales potential if cleared on time
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+            <div className="overflow-x-auto overflow-y-auto flex-1">
+              <table className="w-full min-w-[760px] text-xs text-left">
+                <thead className="bg-slate-100 text-slate-600 font-semibold border-b border-slate-200 sticky top-0 z-10">
+                  <tr>
+                    <th className="py-2.5 px-4">Medicine & Form</th>
+                    <th className="py-2.5 px-3">Batch & Expiry</th>
+                    <th className="py-2.5 px-3 text-center">Remaining</th>
+                    <th className="py-2.5 px-3 text-center">Urgency</th>
+                    <th className="py-2.5 px-3">Clearance Action Hint</th>
+                    <th className="py-2.5 px-3">Operational Strategy</th>
+                    <th className="py-2.5 px-3 text-right">Stock (MRP)</th>
+                    <th className="py-2.5 px-4 text-center">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {!clearanceData?.suggestions?.length ? (
+                    <tr>
+                      <td colSpan={8} className="py-12 text-center text-slate-400">
+                        <CheckCircle className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+                        <div className="text-xs font-bold text-slate-700">No clearance actions required</div>
+                        <div className="text-[11px] text-slate-400 mt-0.5">
+                          No batches are nearing expiry in the 90-day window.
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    clearanceData.suggestions.map((s: any) => (
+                      <tr key={s.batchId} className="hover:bg-slate-50 transition">
+                        <td className="py-2.5 px-4">
+                          <div className="font-bold text-slate-900">{s.brandName} {s.strength}</div>
+                          <div className="text-[10px] text-slate-400">{s.genericName} • {s.dosageForm}</div>
+                        </td>
+                        <td className="py-2.5 px-3 font-mono">
+                          <div className="font-semibold text-slate-800">{s.batchNumber}</div>
+                          <div className="text-[10px] text-slate-500">{s.expiryDate}</div>
+                        </td>
+                        <td className="py-2.5 px-3 text-center font-bold">
+                          {s.daysUntilExpiry <= 0 ? (
+                            <span className="text-rose-600 font-black">EXPIRED</span>
+                          ) : (
+                            <span>{s.daysUntilExpiry} days</span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              s.urgency === 'CRITICAL'
+                                ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                                : s.urgency === 'HIGH'
+                                ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                : 'bg-blue-100 text-blue-800 border border-blue-300'
+                            }`}
+                          >
+                            {s.urgency}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                            {s.recommendedDiscountPercent > 0 && (
+                              <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded font-black text-[10px]">
+                                {s.recommendedDiscountPercent}% OFF
+                              </span>
+                            )}
+                            <span>{s.actionLabel}</span>
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-3 text-[11px] text-slate-600 max-w-xs">
+                          {s.strategy}
+                        </td>
+                        <td className="py-2.5 px-3 text-right">
+                          <div className="font-bold text-slate-900">{s.quantity} units</div>
+                          <div className="text-[10px] text-slate-500">{formatPaiseToINR(s.totalMrpValuePaise)}</div>
+                        </td>
+                        <td className="py-2.5 px-4 text-center">
+                          {user.accountType === 'OWNER' && (
+                            <button
+                              onClick={() => {
+                                setAdjustBatch({
+                                  id: s.batchId,
+                                  brandName: s.brandName,
+                                  batchNumber: s.batchNumber,
+                                  quantity: s.quantity,
+                                  mrpPaise: s.mrpPaise,
+                                });
+                                setAdjustQty(s.quantity.toString());
+                                setAdjustReason(`Clearance write-off / supplier return (${s.actionLabel})`);
+                              }}
+                              className="px-2.5 py-1 bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 border border-slate-300 hover:border-rose-300 rounded text-[11px] font-bold transition flex items-center gap-1 mx-auto"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              <span>Write-Off</span>
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* Batches Table */
+        <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+        <div className="overflow-x-auto overflow-y-auto flex-1">
+          <table className="w-full min-w-[760px] text-xs text-left">
             <thead className="bg-slate-100 text-slate-600 font-semibold border-b border-slate-200 sticky top-0 z-10">
               <tr>
                 <th className="py-2.5 px-4">Medicine Name</th>
@@ -252,6 +423,7 @@ export const ExpiryManagementScreen: React.FC<ExpiryManagementScreenProps> = ({ 
           </table>
         </div>
       </div>
+      )}
 
       {/* Modal: Write-off / Adjust Stock */}
       {adjustBatch && (

@@ -121,9 +121,9 @@ export const StockCheckScreen: React.FC = () => {
   });
 
   return (
-    <div className="flex-1 flex flex-col p-6 bg-slate-100 overflow-hidden select-none">
+    <div className="flex-1 flex flex-col p-3 sm:p-6 bg-slate-100 overflow-y-auto lg:overflow-hidden select-none">
       {/* Top Header & Tabs */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-4">
         <div>
           <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
             <Boxes className="w-5 h-5 text-teal-600" />
@@ -134,9 +134,9 @@ export const StockCheckScreen: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Tabs */}
-          <div className="bg-white border border-slate-200 rounded-lg p-0.5 flex">
+          <div className="bg-white border border-slate-200 rounded-lg p-0.5 flex flex-wrap gap-1">
             <button
               onClick={() => setActiveTab('BATCHES')}
               className={`px-3 py-1.5 rounded-md text-xs font-bold transition flex items-center gap-1.5 ${
@@ -188,8 +188,8 @@ export const StockCheckScreen: React.FC = () => {
       {activeTab === 'BATCHES' && (
         <div className="flex-1 flex flex-col gap-3 overflow-hidden">
           {/* Sub Filters */}
-          <div className="flex items-center justify-between">
-            <div className="relative w-72">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="relative flex-1 sm:w-72">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
               <input
                 type="text"
@@ -200,7 +200,7 @@ export const StockCheckScreen: React.FC = () => {
               />
             </div>
 
-            <div className="flex bg-slate-200 p-1 rounded-lg text-xs font-semibold text-slate-600">
+            <div className="flex flex-wrap bg-slate-200 p-1 rounded-lg text-xs font-semibold text-slate-600 gap-1">
               <button
                 onClick={() => setFilterMode('ALL')}
                 className={`px-3 py-1 rounded-md transition ${
@@ -236,8 +236,8 @@ export const StockCheckScreen: React.FC = () => {
 
           {/* Batches Table */}
           <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-            <div className="overflow-y-auto flex-1">
-              <table className="w-full text-xs text-left">
+            <div className="overflow-x-auto overflow-y-auto flex-1">
+              <table className="w-full min-w-[760px] text-xs text-left">
                 <thead className="bg-slate-100 text-slate-600 font-semibold border-b border-slate-200 sticky top-0 z-10">
                   <tr>
                     <th className="py-2.5 px-4">Medicine Name</th>
@@ -311,7 +311,7 @@ export const StockCheckScreen: React.FC = () => {
       {/* TAB 2: PHYSICAL STOCK AUDIT & VARIANCE POSTING (INV-010) */}
       {activeTab === 'AUDIT' && (
         <div className="flex-1 flex flex-col gap-3 overflow-hidden bg-white rounded-xl border border-slate-200 shadow-sm p-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
             <div>
               <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
                 <ClipboardList className="w-4 h-4 text-teal-600" />
@@ -322,7 +322,7 @@ export const StockCheckScreen: React.FC = () => {
               </p>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
                 <span>Rack Filter:</span>
                 <select
@@ -355,8 +355,8 @@ export const StockCheckScreen: React.FC = () => {
             </div>
           )}
 
-          <div className="overflow-y-auto flex-1">
-            <table className="w-full text-xs text-left">
+          <div className="overflow-x-auto overflow-y-auto flex-1">
+            <table className="w-full min-w-[700px] text-xs text-left">
               <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-300 sticky top-0 z-10 text-[11px]">
                 <tr>
                   <th className="py-2.5 px-3">Rack</th>
@@ -443,8 +443,8 @@ export const StockCheckScreen: React.FC = () => {
             </div>
           </div>
 
-          <div className="overflow-y-auto flex-1">
-            <table className="w-full text-xs text-left">
+          <div className="overflow-x-auto overflow-y-auto flex-1">
+            <table className="w-full min-w-[700px] text-xs text-left">
               <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-300 sticky top-0 z-10 text-[11px]">
                 <tr>
                   <th className="py-2.5 px-4">Medicine Name</th>

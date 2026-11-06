@@ -66,7 +66,7 @@ export const OwnerDashboardScreen: React.FC = () => {
   }
 
   return (
-    <main className="flex-1 flex flex-col bg-slate-100 overflow-y-auto p-6">
+    <main className="flex-1 flex flex-col bg-slate-100 overflow-y-auto p-3 sm:p-6">
       {/* Stale Warning Banner per FES Section 8.4 */}
       {data.isStale && (
         <div className="mb-4 bg-amber-500 text-slate-900 px-4 py-2.5 rounded-lg flex items-center justify-between shadow-sm">
@@ -81,7 +81,7 @@ export const OwnerDashboardScreen: React.FC = () => {
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <div>
           <h1 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
             Owner Financial & Operations Overview
@@ -95,7 +95,7 @@ export const OwnerDashboardScreen: React.FC = () => {
         </div>
         <button
           onClick={fetchDashboard}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-sm transition"
+          className="self-start sm:self-auto flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-sm transition"
         >
           <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
           <span>Refresh</span>
@@ -103,7 +103,7 @@ export const OwnerDashboardScreen: React.FC = () => {
       </div>
 
       {/* Top Metric Cards */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {/* Today's Sales */}
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-500 mb-2">
@@ -178,7 +178,7 @@ export const OwnerDashboardScreen: React.FC = () => {
       </div>
 
       {/* Middle Grid: Payment Splits & Top Sellers */}
-      <div className="grid grid-cols-3 gap-6 mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         {/* Payment Split */}
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
           <h2 className="text-sm font-bold text-slate-800 mb-4">Payment Methods</h2>
@@ -205,7 +205,7 @@ export const OwnerDashboardScreen: React.FC = () => {
         </div>
 
         {/* Top Selling Medicines */}
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm col-span-2">
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm col-span-1 lg:col-span-2">
           <h2 className="text-sm font-bold text-slate-800 mb-4">Fast-Moving Medicines</h2>
           <div className="divide-y divide-slate-100">
             {data.topSellingProducts.length === 0 ? (
@@ -233,7 +233,7 @@ export const OwnerDashboardScreen: React.FC = () => {
       </div>
 
       {/* Bottom Section: Risk, Near-Expiry & Operational Actions */}
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Near Expiry Risk */}
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
           <div className="flex items-center gap-2 text-amber-600 mb-2 font-bold text-xs">

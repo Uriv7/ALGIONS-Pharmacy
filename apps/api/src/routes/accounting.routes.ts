@@ -647,4 +647,124 @@ accountingRouter.get('/balance-sheet', authenticateToken, requireOwner, async (r
   }
 });
 
+// GET /accounting/outstanding/ageing (ACC-006 / RPT-006: Customer & Supplier Ageing Analysis)
+accountingRouter.get('/outstanding/ageing', authenticateToken, requireOwner, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const storeId = req.user!.storeId;
+    const now = Date.now();
+
+    // 1. Customer Khata Ageing
+    const customers = await req.db.query<{
+      id: string;
+      name: string;
+      phone: string;
+      outstanding_balance_paise: number;
+      oldest_invoice_date: string | null;
+    }>(
+      `SELECT c.id, c.name, c.phone, c.outstanding_balance_paise,
+              (SELECT MIN(created_at) FROM sales_invoices WHERE customer_id = c.id AND store_id = $1 AND status = 'POSTED') as oldest_invoice_date
+       FROM customers c
+       WHERE c.store_id = $1 AND c.outstanding_balance_paise > 0
+       ORDER BY c.outstanding_balance_paise DESC`,
+      [storeId]
+    );
+
+    const customerRows = customers.rows.map((c) => {
+      const invDate = c.oldest_invoice_date ? new Date(c.oldest_invoice_date).getTime() : now;
+      const ageDays = Math.max(0, Math.floor((now - invDate) / (1000 * 60 * 60 * 24)));
+      let bucket: '0_30' | '31_60' | '61_90' | '90_PLUS' = '0_30';
+      if (ageDays > 90) bucket = '90_PLUS';
+      else if (ageDays > 60) bucket = '61_90';
+      else if (ageDays > 30) bucket = '31_60';
+
+      return {
+        id: c.id,
+        name: c.name,
+        phone: c.phone || 'N/A',
+        outstandingPaise: Number(c.outstanding_balance_paise),
+        ageDays,
+        bucket,
+        oldestInvoiceDate: c.oldest_invoice_date || new Date().toISOString(),
+      };
+    });
+
+    const customerBuckets = {
+      days0_30Paise: customerRows.filter((r) => r.bucket === '0_30').reduce((s, r) => s + r.outstandingPaise, 0),
+      days31_60Paise: customerRows.filter((r) => r.bucket === '31_60').reduce((s, r) => s + r.outstandingPaise, 0),
+      days61_90Paise: customerRows.filter((r) => r.bucket === '61_90').reduce((s, r) => s + r.outstandingPaise, 0),
+      days90PlusPaise: customerRows.filter((r) => r.bucket === '90_PLUS').reduce((s, r) => s + r.outstandingPaise, 0),
+      totalOutstandingPaise: customerRows.reduce((s, r) => s + r.outstandingPaise, 0),
+    };
+
+    // 2. Supplier Trade Payables Ageing
+    const suppliers = await req.db.query<{
+      id: string;
+      name: string;
+      gstin: string;
+      phone: string;
+      credit_period_days: number;
+      oldest_purchase_date: string | null;
+      total_purchases: number;
+      total_payments: number;
+    }>(
+      `SELECT s.id, s.name, s.gstin, s.phone, s.credit_period_days,
+              (SELECT MIN(supplier_invoice_date) FROM purchase_invoices WHERE supplier_id = s.id AND store_id = $1) as oldest_purchase_date,
+              COALESCE((SELECT SUM(p.total_amount_paise) FROM purchase_invoices p WHERE p.supplier_id = s.id AND p.store_id = $1), 0) as total_purchases,
+              COALESCE((SELECT SUM(l.debit_paise) FROM ledger_entries l WHERE l.account_code = '2000' AND l.narration LIKE '%' || s.name || '%' AND l.store_id = $1), 0) as total_payments
+       FROM suppliers s
+       WHERE s.store_id = $1
+       ORDER BY s.name ASC`,
+      [storeId]
+    );
+
+    const supplierRows = suppliers.rows
+      .map((s) => {
+        const balance = Math.max(0, Number(s.total_purchases) - Number(s.total_payments));
+        const invDate = s.oldest_purchase_date ? new Date(s.oldest_purchase_date).getTime() : now;
+        const ageDays = Math.max(0, Math.floor((now - invDate) / (1000 * 60 * 60 * 24)));
+        const isOverdue = ageDays > (s.credit_period_days || 30);
+        let bucket: '0_30' | '31_60' | '61_90' | '90_PLUS' = '0_30';
+        if (ageDays > 90) bucket = '90_PLUS';
+        else if (ageDays > 60) bucket = '61_90';
+        else if (ageDays > 30) bucket = '31_60';
+
+        return {
+          id: s.id,
+          name: s.name,
+          gstin: s.gstin || 'N/A',
+          phone: s.phone || 'N/A',
+          creditPeriodDays: s.credit_period_days || 30,
+          outstandingPaise: balance,
+          ageDays,
+          isOverdue,
+          bucket,
+          oldestPurchaseDate: s.oldest_purchase_date || new Date().toISOString().slice(0, 10),
+        };
+      })
+      .filter((s) => s.outstandingPaise > 0);
+
+    const supplierBuckets = {
+      days0_30Paise: supplierRows.filter((r) => r.bucket === '0_30').reduce((s, r) => s + r.outstandingPaise, 0),
+      days31_60Paise: supplierRows.filter((r) => r.bucket === '31_60').reduce((s, r) => s + r.outstandingPaise, 0),
+      days61_90Paise: supplierRows.filter((r) => r.bucket === '61_90').reduce((s, r) => s + r.outstandingPaise, 0),
+      days90PlusPaise: supplierRows.filter((r) => r.bucket === '90_PLUS').reduce((s, r) => s + r.outstandingPaise, 0),
+      totalOutstandingPaise: supplierRows.reduce((s, r) => s + r.outstandingPaise, 0),
+    };
+
+    res.json({
+      asOf: new Date().toISOString(),
+      customers: {
+        buckets: customerBuckets,
+        rows: customerRows,
+      },
+      suppliers: {
+        buckets: supplierBuckets,
+        rows: supplierRows,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 

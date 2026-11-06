@@ -137,8 +137,8 @@ export const BillGrid: React.FC<BillGridProps> = ({
       </div>
 
       {/* Bill Items Grid (TanStack / Table style) */}
-      <div className="flex-1 overflow-y-auto">
-        <table className="w-full border-collapse text-left text-xs">
+      <div className="flex-1 overflow-x-auto overflow-y-auto">
+        <table className="w-full min-w-[720px] border-collapse text-left text-xs">
           <thead className="bg-slate-100 text-slate-600 sticky top-0 border-b border-slate-200 z-10 font-semibold select-none">
             <tr>
               <th className="py-2.5 px-3 w-8 text-center">#</th>

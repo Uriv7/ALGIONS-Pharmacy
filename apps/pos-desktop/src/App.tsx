@@ -32,6 +32,7 @@ export const App: React.FC = () => {
   const [isOffline, setIsOffline] = useState<boolean>(false);
   const [pendingSyncCount, setPendingSyncCount] = useState<number>(0);
   const [heldBillsCount, setHeldBillsCount] = useState<number>(0);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
 
   // Login form state
   const [username, setUsername] = useState('staff1');
@@ -225,6 +226,7 @@ export const App: React.FC = () => {
         onToggleOfflineSimulator={handleToggleOffline}
         onTriggerSync={handleTriggerSync}
         onLock={() => setIsLocked(true)}
+        onToggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
       />
 
       {/* Offline Mode Banner per FES Section 4 */}
@@ -243,6 +245,8 @@ export const App: React.FC = () => {
           accountType={user.accountType}
           heldBillsCount={heldBillsCount}
           exceptionsCount={storeStatus?.pendingExceptionsCount || 0}
+          isMobileOpen={isMobileMenuOpen}
+          onCloseMobile={() => setIsMobileMenuOpen(false)}
           onSelectScreen={setActiveScreen}
         />
 

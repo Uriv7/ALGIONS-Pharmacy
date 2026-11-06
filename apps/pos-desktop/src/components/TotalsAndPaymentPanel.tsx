@@ -34,7 +34,7 @@ export const TotalsAndPaymentPanel: React.FC<TotalsAndPaymentPanelProps> = ({
   const changeToReturnPaise = Math.max(0, cashGivenPaise - totals.grandTotalPaise);
 
   return (
-    <div className="w-[380px] bg-slate-50 flex flex-col justify-between overflow-y-auto border-l border-slate-200 p-4 select-none flex-shrink-0">
+    <div className="w-full xl:w-[380px] bg-slate-50 flex flex-col justify-between overflow-y-auto border-t xl:border-t-0 xl:border-l border-slate-200 p-3 sm:p-4 select-none flex-shrink-0">
       {/* 1. Customer Card (F3) */}
       <div className="mb-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
         <div className="flex items-center justify-between mb-1.5">

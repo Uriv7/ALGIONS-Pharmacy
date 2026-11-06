@@ -42,6 +42,8 @@ interface NavigationRailProps {
   accountType: AccountType;
   heldBillsCount: number;
   exceptionsCount: number;
+  isMobileOpen?: boolean;
+  onCloseMobile?: () => void;
   onSelectScreen: (screen: ActiveScreen) => void;
 }
 
@@ -50,16 +52,38 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
   accountType,
   heldBillsCount,
   exceptionsCount,
+  isMobileOpen = false,
+  onCloseMobile,
   onSelectScreen,
 }) => {
   const isOwner = accountType === 'OWNER';
 
+  const handleSelect = (screen: ActiveScreen) => {
+    onSelectScreen(screen);
+    if (onCloseMobile) {
+      onCloseMobile();
+    }
+  };
+
   return (
-    <aside className="w-16 bg-slate-900 flex flex-col items-center py-2 select-none flex-shrink-0 z-10 overflow-y-auto">
-      <div className="flex flex-col gap-1.5 w-full px-1.5">
-        {/* POS Billing Screen (P1) */}
-        <button
-          onClick={() => onSelectScreen('POS')}
+    <>
+      {/* Mobile Backdrop */}
+      {isMobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-xs z-30 md:hidden transition-opacity"
+          onClick={onCloseMobile}
+        />
+      )}
+
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 w-16 bg-slate-900 flex flex-col items-center py-2 select-none flex-shrink-0 overflow-y-auto transition-transform duration-200 ease-in-out md:static md:translate-x-0 ${
+          isMobileOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0'
+        }`}
+      >
+        <div className="flex flex-col gap-1.5 w-full px-1.5">
+          {/* POS Billing Screen (P1) */}
+          <button
+            onClick={() => handleSelect('POS')}
           className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition text-[9px] font-medium w-full ${
             activeScreen === 'POS'
               ? 'bg-teal-600 text-white shadow'
@@ -73,7 +97,7 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
 
         {/* Medicine Search (M1) */}
         <button
-          onClick={() => onSelectScreen('SEARCH')}
+          onClick={() => handleSelect('SEARCH')}
           className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition text-[9px] font-medium w-full ${
             activeScreen === 'SEARCH'
               ? 'bg-teal-600 text-white shadow'
@@ -87,7 +111,7 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
 
         {/* Stock Check (I1) */}
         <button
-          onClick={() => onSelectScreen('STOCK')}
+          onClick={() => handleSelect('STOCK')}
           className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition text-[9px] font-medium w-full ${
             activeScreen === 'STOCK'
               ? 'bg-teal-600 text-white shadow'
@@ -101,7 +125,7 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
 
         {/* Medicines Catalog / Formulations (MED-001) */}
         <button
-          onClick={() => onSelectScreen('MEDICINES')}
+          onClick={() => handleSelect('MEDICINES')}
           className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition text-[9px] font-medium w-full ${
             activeScreen === 'MEDICINES'
               ? 'bg-teal-600 text-white shadow'
@@ -115,7 +139,7 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
 
         {/* Purchase Entry (U1) */}
         <button
-          onClick={() => onSelectScreen('PURCHASES')}
+          onClick={() => handleSelect('PURCHASES')}
           className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition text-[9px] font-medium w-full ${
             activeScreen === 'PURCHASES'
               ? 'bg-teal-600 text-white shadow'
@@ -129,7 +153,7 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
 
         {/* Supplier Directory & Payables (PUR-002) */}
         <button
-          onClick={() => onSelectScreen('SUPPLIERS')}
+          onClick={() => handleSelect('SUPPLIERS')}
           className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition text-[9px] font-medium w-full ${
             activeScreen === 'SUPPLIERS'
               ? 'bg-teal-600 text-white shadow'
@@ -143,7 +167,7 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
 
         {/* Invoices List & Returns (P3 / RET-001) */}
         <button
-          onClick={() => onSelectScreen('INVOICES')}
+          onClick={() => handleSelect('INVOICES')}
           className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition text-[9px] font-medium w-full ${
             activeScreen === 'INVOICES'
               ? 'bg-teal-600 text-white shadow'
@@ -157,7 +181,7 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
 
         {/* Customer Khata & Credit (CUS-001) */}
         <button
-          onClick={() => onSelectScreen('CUSTOMERS')}
+          onClick={() => handleSelect('CUSTOMERS')}
           className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition text-[9px] font-medium w-full ${
             activeScreen === 'CUSTOMERS'
               ? 'bg-teal-600 text-white shadow'
@@ -171,7 +195,7 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
 
         {/* Expiry Control (EXP-001) */}
         <button
-          onClick={() => onSelectScreen('EXPIRY')}
+          onClick={() => handleSelect('EXPIRY')}
           className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition text-[9px] font-medium w-full ${
             activeScreen === 'EXPIRY'
               ? 'bg-teal-600 text-white shadow'
@@ -185,7 +209,7 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
 
         {/* Held Bills (P2) */}
         <button
-          onClick={() => onSelectScreen('HELD')}
+          onClick={() => handleSelect('HELD')}
           className={`relative flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition text-[9px] font-medium w-full ${
             activeScreen === 'HELD'
               ? 'bg-teal-600 text-white shadow'
@@ -209,7 +233,7 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
 
             {/* Owner Financial Dashboard (FES 8.4) */}
             <button
-              onClick={() => onSelectScreen('DASHBOARD')}
+              onClick={() => handleSelect('DASHBOARD')}
               className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition text-[9px] font-medium w-full ${
                 activeScreen === 'DASHBOARD'
                   ? 'bg-teal-600 text-white shadow'
@@ -223,7 +247,7 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
 
             {/* MIS & Sales Velocity Reports (RPT-002) */}
             <button
-              onClick={() => onSelectScreen('REPORTS')}
+              onClick={() => handleSelect('REPORTS')}
               className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition text-[9px] font-medium w-full ${
                 activeScreen === 'REPORTS'
                   ? 'bg-teal-600 text-white shadow'
@@ -237,7 +261,7 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
 
             {/* GST & Double-Entry Accounting (GST-004 / ACC-005) */}
             <button
-              onClick={() => onSelectScreen('GST')}
+              onClick={() => handleSelect('GST')}
               className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition text-[9px] font-medium w-full ${
                 activeScreen === 'GST'
                   ? 'bg-teal-600 text-white shadow'
@@ -251,7 +275,7 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
 
             {/* Reconciliation Exceptions Queue (S2) */}
             <button
-              onClick={() => onSelectScreen('EXCEPTIONS')}
+              onClick={() => handleSelect('EXCEPTIONS')}
               className={`relative flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition text-[9px] font-medium w-full ${
                 activeScreen === 'EXCEPTIONS'
                   ? 'bg-teal-600 text-white shadow'
@@ -270,7 +294,7 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
 
             {/* Staff & Audit Trail (A1) */}
             <button
-              onClick={() => onSelectScreen('STAFF')}
+              onClick={() => handleSelect('STAFF')}
               className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition text-[9px] font-medium w-full ${
                 activeScreen === 'STAFF'
                   ? 'bg-teal-600 text-white shadow'
@@ -284,7 +308,7 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
 
             {/* Store & Offline Control (DEV-004) */}
             <button
-              onClick={() => onSelectScreen('SYSTEM')}
+              onClick={() => handleSelect('SYSTEM')}
               className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition text-[9px] font-medium w-full ${
                 activeScreen === 'SYSTEM'
                   ? 'bg-teal-600 text-white shadow'
@@ -299,5 +323,6 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
         )}
       </div>
     </aside>
+    </>
   );
 };

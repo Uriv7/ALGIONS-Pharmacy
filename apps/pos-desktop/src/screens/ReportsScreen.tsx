@@ -77,9 +77,9 @@ export const ReportsScreen: React.FC = () => {
     : 0;
 
   return (
-    <div className="flex-1 flex flex-col p-6 bg-slate-100 overflow-hidden select-none">
+    <div className="flex-1 flex flex-col p-3 sm:p-6 bg-slate-100 overflow-y-auto lg:overflow-hidden select-none">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div>
           <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
             <BarChart3 className="w-5 h-5 text-teal-600" />
@@ -90,7 +90,7 @@ export const ReportsScreen: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {/* Preset buttons */}
           <div className="flex items-center bg-white border border-slate-200 rounded-lg p-0.5 text-xs font-semibold">
             <button
@@ -138,7 +138,7 @@ export const ReportsScreen: React.FC = () => {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-4 gap-4 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4">
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
           <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
             Gross Billed Revenue
@@ -218,8 +218,8 @@ export const ReportsScreen: React.FC = () => {
       {/* Tab 1: Item Sales Table */}
       {activeTab === 'ITEMS' && (
         <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-          <div className="overflow-y-auto flex-1">
-            <table className="w-full text-xs text-left">
+          <div className="overflow-x-auto overflow-y-auto flex-1">
+            <table className="w-full min-w-[650px] text-xs text-left">
               <thead className="bg-slate-100 text-slate-600 font-semibold border-b border-slate-200 sticky top-0 z-10">
                 <tr>
                   <th className="py-2.5 px-4">Medicine Name</th>
@@ -262,8 +262,8 @@ export const ReportsScreen: React.FC = () => {
       {/* Tab 2: Cashier Table */}
       {activeTab === 'CASHIERS' && (
         <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-          <div className="overflow-y-auto flex-1">
-            <table className="w-full text-xs text-left">
+          <div className="overflow-x-auto overflow-y-auto flex-1">
+            <table className="w-full min-w-[500px] text-xs text-left">
               <thead className="bg-slate-100 text-slate-600 font-semibold border-b border-slate-200 sticky top-0 z-10">
                 <tr>
                   <th className="py-2.5 px-4">Cashier / Staff Member</th>
@@ -299,9 +299,9 @@ export const ReportsScreen: React.FC = () => {
         </div>
       )}
 
-      {/* Tab 3: Velocity Analysis (EXP-006) */}
+      {/* Tab 3: Velocity Analysis (EXP-006) (Responsive: stacked on mobile, 2 columns on tablet/desktop) */}
       {activeTab === 'VELOCITY' && (
-        <div className="flex-1 grid grid-cols-2 gap-4 overflow-hidden">
+        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto">
           {/* Fast Moving */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
             <div className="p-3 bg-emerald-50 border-b border-emerald-100 flex items-center gap-2 text-xs font-bold text-emerald-900">

@@ -36,9 +36,9 @@ export const MedicineSearchScreen: React.FC<MedicineSearchScreenProps> = ({
   }, [query]);
 
   return (
-    <div className="flex-1 flex overflow-hidden bg-slate-100 select-none">
+    <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden bg-slate-100 select-none">
       {/* Left List */}
-      <div className="w-[500px] flex flex-col bg-white border-r border-slate-200">
+      <div className="w-full lg:w-[420px] xl:w-[480px] flex flex-col bg-white border-b lg:border-b-0 lg:border-r border-slate-200 flex-shrink-0 h-72 sm:h-80 lg:h-auto">
         <div className="p-3 border-b border-slate-200 bg-slate-50">
           <div className="relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
@@ -89,19 +89,19 @@ export const MedicineSearchScreen: React.FC<MedicineSearchScreenProps> = ({
       </div>
 
       {/* Right Detail Pane */}
-      <div className="flex-1 flex flex-col p-6 overflow-y-auto">
+      <div className="flex-1 flex flex-col p-3 sm:p-6 overflow-y-auto">
         {selectedProduct ? (
-          <div className="space-y-6 max-w-3xl">
+          <div className="space-y-4 sm:space-y-6 max-w-3xl">
             {/* Header info */}
-            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-              <div className="flex items-center justify-between">
+            <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                   <h2 className="text-xl font-bold text-slate-900">{selectedProduct.product.brandName}</h2>
                   <p className="text-sm text-slate-600 mt-0.5">
                     Composition: <span className="font-semibold text-teal-800">{selectedProduct.product.genericName}</span> ({selectedProduct.product.strength})
                   </p>
                 </div>
-                <div className="text-right">
+                <div className="sm:text-right">
                   <span className="px-2.5 py-1 rounded bg-slate-100 text-slate-700 text-xs font-bold uppercase tracking-wider">
                     {selectedProduct.product.dosageForm}
                   </span>
@@ -111,7 +111,7 @@ export const MedicineSearchScreen: React.FC<MedicineSearchScreenProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-slate-100 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mt-4 pt-4 border-t border-slate-100 text-xs">
                 <div>
                   <span className="text-slate-400">Manufacturer:</span>
                   <div className="font-bold text-slate-800">{selectedProduct.product.manufacturer}</div>
@@ -133,7 +133,7 @@ export const MedicineSearchScreen: React.FC<MedicineSearchScreenProps> = ({
             </div>
 
             {/* Batches Table */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
               <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Boxes className="w-4 h-4 text-teal-600" />
@@ -141,7 +141,7 @@ export const MedicineSearchScreen: React.FC<MedicineSearchScreenProps> = ({
                 </div>
               </div>
 
-              <table className="w-full text-xs text-left">
+              <table className="w-full min-w-[550px] text-xs text-left">
                 <thead className="bg-slate-100 text-slate-600 font-semibold border-b border-slate-200">
                   <tr>
                     <th className="py-2.5 px-4">Batch No</th>

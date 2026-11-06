@@ -452,6 +452,14 @@ export class ApiClient {
       body: JSON.stringify({ rows }),
     });
   }
+
+  async getOutstandingAgeing(): Promise<any> {
+    return this.request<any>('/accounting/outstanding/ageing');
+  }
+
+  async getExpiryClearanceHints(): Promise<any> {
+    return this.request<any>('/inventory/expiry-clearance-hints');
+  }
 }
 
 export const api = new ApiClient();

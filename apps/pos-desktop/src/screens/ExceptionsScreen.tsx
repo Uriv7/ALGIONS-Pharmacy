@@ -58,8 +58,8 @@ export const ExceptionsScreen: React.FC = () => {
   };
 
   return (
-    <main className="flex-1 flex flex-col bg-slate-100 overflow-hidden p-6 select-none">
-      <div className="flex items-center justify-between mb-4">
+    <main className="flex-1 flex flex-col bg-slate-100 overflow-y-auto lg:overflow-hidden p-3 sm:p-6 select-none">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div>
           <h1 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
             Reconciliation Exceptions Queue
@@ -73,7 +73,7 @@ export const ExceptionsScreen: React.FC = () => {
         </div>
         <button
           onClick={fetchExceptions}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-sm"
+          className="self-start sm:self-auto flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-sm"
         >
           <RefreshCw className="w-3.5 h-3.5" />
           <span>Refresh Queue</span>
@@ -86,9 +86,9 @@ export const ExceptionsScreen: React.FC = () => {
         </div>
       )}
 
-      <div className="flex-1 flex gap-6 overflow-hidden">
+      <div className="flex-1 flex flex-col lg:flex-row gap-4 sm:gap-6 overflow-y-auto lg:overflow-hidden">
         {/* Left: Exception List */}
-        <div className="w-1/3 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
+        <div className="w-full lg:w-1/3 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden h-64 sm:h-72 lg:h-auto flex-shrink-0">
           <div className="p-3 bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-700">
             Exceptions Log
           </div>
@@ -143,7 +143,7 @@ export const ExceptionsScreen: React.FC = () => {
         </div>
 
         {/* Right: Detailed Inspection & Resolution */}
-        <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col p-6 overflow-y-auto">
+        <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col p-4 sm:p-6 overflow-y-auto">
           {selectedException ? (
             <div className="space-y-6">
               <div className="flex items-center justify-between border-b border-slate-200 pb-4">

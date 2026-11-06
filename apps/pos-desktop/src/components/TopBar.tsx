@@ -8,6 +8,7 @@ import {
   Computer,
   User,
   ShieldCheck,
+  Menu,
 } from 'lucide-react';
 import { AuthSessionUser } from '@algions/contracts';
 
@@ -22,6 +23,7 @@ interface TopBarProps {
   onToggleOfflineSimulator: () => void;
   onTriggerSync: () => void;
   onLock: () => void;
+  onToggleMobileMenu?: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -35,6 +37,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   onToggleOfflineSimulator,
   onTriggerSync,
   onLock,
+  onToggleMobileMenu,
 }) => {
   let statusLabel: StatusLabelType = 'ONLINE – CLOUD SYNCED';
   if (isOffline) {
@@ -46,30 +49,40 @@ export const TopBar: React.FC<TopBarProps> = ({
   }
 
   return (
-    <header className="h-14 bg-white border-b border-slate-200 px-4 flex items-center justify-between select-none shadow-sm z-20">
-      {/* Left: Brand & Store */}
-      <div className="flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-teal-600 flex items-center justify-center text-white font-bold text-base shadow">
+    <header className="h-14 bg-white border-b border-slate-200 px-3 sm:px-4 flex items-center justify-between select-none shadow-sm z-20">
+      {/* Left: Mobile Menu + Brand & Store */}
+      <div className="flex items-center gap-2 sm:gap-3">
+        {onToggleMobileMenu && (
+          <button
+            onClick={onToggleMobileMenu}
+            className="md:hidden p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition"
+            title="Toggle Navigation Menu"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+        )}
+
+        <div className="w-8 h-8 rounded-lg bg-teal-600 flex items-center justify-center text-white font-bold text-base shadow flex-shrink-0">
           A
         </div>
-        <div>
-          <div className="font-bold text-slate-800 text-sm leading-tight tracking-tight">
+        <div className="min-w-0">
+          <div className="font-bold text-slate-800 text-xs sm:text-sm leading-tight tracking-tight truncate max-w-[140px] sm:max-w-xs md:max-w-md">
             {storeName}
           </div>
-          <div className="text-[11px] text-slate-400 font-medium">
+          <div className="text-[10px] text-slate-400 font-medium hidden sm:block">
             ALGIONS Pharmacy ERP v1.0
           </div>
         </div>
       </div>
 
-      {/* Center: System Status & Workstation Indicators */}
-      <div className="flex items-center gap-2.5">
+      {/* Center: System Status & Workstation Indicators (Responsive) */}
+      <div className="flex items-center gap-1.5 sm:gap-2.5">
         <StatusChip
           status={statusLabel}
           subText={pendingSyncCount > 0 ? `${pendingSyncCount} pending` : undefined}
         />
 
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-100 text-slate-700 text-xs font-medium border border-slate-200">
+        <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-100 text-slate-700 text-xs font-medium border border-slate-200">
           <Computer className="w-3.5 h-3.5 text-teal-600" />
           <span>{isPrimary ? 'Primary Workstation (Offline-Ready)' : 'Secondary Counter'}</span>
         </div>
@@ -77,7 +90,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         {/* Offline Simulator Switch for Demo / Outage testing */}
         <button
           onClick={onToggleOfflineSimulator}
-          className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold transition border ${
+          className={`hidden md:flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold transition border ${
             isOffline
               ? 'bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200'
               : 'bg-slate-50 text-slate-600 border-slate-300 hover:bg-slate-100'
@@ -100,19 +113,19 @@ export const TopBar: React.FC<TopBarProps> = ({
         {pendingSyncCount > 0 && !isOffline && (
           <button
             onClick={onTriggerSync}
-            className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition animate-pulse"
+            className="flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition animate-pulse"
           >
             <RefreshCw className="w-3 h-3 text-blue-600 animate-spin" />
-            <span>Sync ({pendingSyncCount})</span>
+            <span className="hidden sm:inline">Sync ({pendingSyncCount})</span>
           </button>
         )}
       </div>
 
       {/* Right: User, Account Type & Quick Lock */}
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2 pl-3 border-l border-slate-200">
+      <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+        <div className="flex items-center gap-2 pl-2 sm:pl-3 border-l border-slate-200">
           <div className="text-right">
-            <div className="text-xs font-semibold text-slate-800 leading-none">
+            <div className="text-xs font-semibold text-slate-800 leading-none truncate max-w-[80px] sm:max-w-none">
               {user.name}
             </div>
             <div className="text-[10px] text-slate-500 font-medium mt-0.5 flex items-center justify-end gap-1">
