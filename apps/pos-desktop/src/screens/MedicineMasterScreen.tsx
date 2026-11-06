@@ -11,6 +11,10 @@ import {
   Layers,
   MapPin,
   CheckCircle,
+  Download,
+  Upload,
+  FileSpreadsheet,
+  AlertCircle,
 } from 'lucide-react';
 import { api } from '../api/client.js';
 import { AuthSessionUser } from '@algions/contracts';
@@ -27,6 +31,13 @@ export const MedicineMasterScreen: React.FC<MedicineMasterScreenProps> = ({ user
   // Modal State
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any | null>(null);
+
+  // Bulk CSV Import / Export State (MED-008)
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importRows, setImportRows] = useState<any[]>([]);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   // Form Fields
   const [brandName, setBrandName] = useState('');
@@ -145,6 +156,112 @@ export const MedicineMasterScreen: React.FC<MedicineMasterScreenProps> = ({ user
     }
   };
 
+  const handleExportCsv = async () => {
+    setExporting(true);
+    try {
+      const csvData = await api.exportProductsCsv();
+      const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `algions_medicine_catalog_${new Date().toISOString().slice(0, 10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setMsg('Medicine catalog exported to CSV successfully.');
+    } catch (err: any) {
+      alert(`Export failed: ${err.message}`);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const parseCsvLine = (line: string): string[] => {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        result.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    result.push(current.trim());
+    return result;
+  };
+
+  const handleCsvSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportError(null);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const text = event.target?.result as string;
+        const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+        if (lines.length < 2) {
+          setImportError('CSV file is empty or missing data rows.');
+          return;
+        }
+        const parsed: any[] = [];
+        for (let i = 1; i < lines.length; i++) {
+          const cols = parseCsvLine(lines[i]);
+          if (cols.length < 2 || !cols[0]) continue;
+          parsed.push({
+            brandName: cols[0],
+            genericName: cols[1] || 'General Formulation',
+            strength: cols[2] || '',
+            dosageForm: cols[3] || 'TABLET',
+            manufacturer: cols[4] || 'Generic Lab',
+            barcode: cols[5] || '',
+            hsnCode: cols[6] || '3004',
+            taxRatePercent: parseFloat(cols[7] || '12') || 12,
+            unitsPerPack: parseInt(cols[8] || '10', 10) || 10,
+            packUnitLabel: 'Strip',
+            looseUnitLabel: 'Tablet',
+            rackLocation: cols[9] || 'Shelf',
+            reorderLevel: parseInt(cols[10] || '10', 10) || 10,
+          });
+        }
+        if (parsed.length === 0) {
+          setImportError('No valid medicine rows could be parsed from this CSV.');
+        } else {
+          setImportRows(parsed);
+        }
+      } catch (err: any) {
+        setImportError(`Failed to parse CSV file: ${err.message}`);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleConfirmImport = async () => {
+    if (importRows.length === 0) return;
+    setImporting(true);
+    setImportError(null);
+    try {
+      const res = await api.importProductsCsv(importRows);
+      setMsg(`Successfully imported ${res.imported} formulations to master catalogue.`);
+      setShowImportModal(false);
+      setImportRows([]);
+      fetchProducts();
+    } catch (err: any) {
+      setImportError(`Import error: ${err.message}`);
+    } finally {
+      setImporting(false);
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col p-6 bg-slate-100 overflow-hidden select-none">
       {/* Header */}
@@ -159,26 +276,51 @@ export const MedicineMasterScreen: React.FC<MedicineMasterScreenProps> = ({ user
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="relative w-72">
+        <div className="flex items-center gap-2">
+          <div className="relative w-64">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search brand, generic salt, or manufacturer..."
+              placeholder="Search brand, generic salt..."
               className="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-600 font-medium"
             />
           </div>
 
+          <button
+            onClick={handleExportCsv}
+            disabled={exporting}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 rounded-lg text-xs font-bold transition shadow-sm"
+            title="Export full catalog to CSV"
+          >
+            <Download className="w-3.5 h-3.5 text-slate-500" />
+            <span>{exporting ? 'Exporting...' : 'Export CSV'}</span>
+          </button>
+
           {user.accountType === 'OWNER' && (
-            <button
-              onClick={handleOpenAdd}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white rounded-lg text-xs font-bold shadow transition"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add Medicine</span>
-            </button>
+            <>
+              <button
+                onClick={() => {
+                  setImportRows([]);
+                  setImportError(null);
+                  setShowImportModal(true);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 rounded-lg text-xs font-bold transition shadow-sm"
+                title="Bulk import medicine formulations from CSV"
+              >
+                <Upload className="w-3.5 h-3.5 text-teal-600" />
+                <span>Import CSV</span>
+              </button>
+
+              <button
+                onClick={handleOpenAdd}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white rounded-lg text-xs font-bold shadow transition"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Medicine</span>
+              </button>
+            </>
           )}
 
           <button
@@ -488,6 +630,122 @@ export const MedicineMasterScreen: React.FC<MedicineMasterScreenProps> = ({ user
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Bulk CSV Import Modal (MED-008) */}
+      {showImportModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-200 flex flex-col max-h-[90vh]">
+            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FileSpreadsheet className="w-5 h-5 text-teal-400" />
+                <h3 className="font-bold text-sm">Bulk Medicine Formulation Import (MED-008)</h3>
+              </div>
+              <button
+                onClick={() => {
+                  setShowImportModal(false);
+                  setImportRows([]);
+                }}
+                className="text-slate-400 hover:text-white font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-4">
+              <div className="p-3 bg-teal-50 border border-teal-200 rounded-lg text-xs text-teal-900">
+                <p className="font-bold">CSV Import Guidelines:</p>
+                <p className="text-[11px] mt-0.5 text-teal-800">
+                  Headers accepted: Brand Name, Generic Name, Strength, Dosage Form, Manufacturer, Barcodes, HSN Code, GST %, Units per Pack, Rack, Reorder Level.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Select CSV File to Import
+                </label>
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={handleCsvSelect}
+                  className="w-full text-xs text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100 cursor-pointer"
+                />
+              </div>
+
+              {importError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-800 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+                  <span>{importError}</span>
+                </div>
+              )}
+
+              {importRows.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-800">
+                      Parsed Formulations Preview ({importRows.length} total)
+                    </span>
+                    <span className="text-[11px] font-semibold text-teal-600 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200">
+                      Ready to import
+                    </span>
+                  </div>
+
+                  <div className="border border-slate-200 rounded-lg overflow-hidden max-h-48 overflow-y-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-100 text-slate-600 sticky top-0">
+                        <tr>
+                          <th className="py-2 px-3">Brand Name</th>
+                          <th className="py-2 px-3">Generic Composition</th>
+                          <th className="py-2 px-2">Strength</th>
+                          <th className="py-2 px-2">Form</th>
+                          <th className="py-2 px-2 text-center">Pack</th>
+                          <th className="py-2 px-2 text-center">GST %</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {importRows.slice(0, 15).map((row, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50">
+                            <td className="py-2 px-3 font-semibold text-slate-900">{row.brandName}</td>
+                            <td className="py-2 px-3 text-slate-600 text-[11px]">{row.genericName}</td>
+                            <td className="py-2 px-2 text-slate-600">{row.strength}</td>
+                            <td className="py-2 px-2 font-mono text-[11px]">{row.dosageForm}</td>
+                            <td className="py-2 px-2 text-center font-bold">{row.unitsPerPack}</td>
+                            <td className="py-2 px-2 text-center font-bold text-teal-700">{row.taxRatePercent}%</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {importRows.length > 15 && (
+                    <div className="text-[11px] text-slate-400 italic text-center">
+                      ... and {importRows.length - 15} more formulations.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowImportModal(false);
+                  setImportRows([]);
+                }}
+                className="px-4 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmImport}
+                disabled={importing || importRows.length === 0}
+                className="px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-bold shadow transition disabled:opacity-50"
+              >
+                {importing ? 'Importing...' : `Confirm & Import (${importRows.length} Medicines)`}
+              </button>
+            </div>
           </div>
         </div>
       )}

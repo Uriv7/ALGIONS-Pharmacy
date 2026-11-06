@@ -14,19 +14,34 @@ import {
   Plus,
   ArrowRight,
   TrendingDown,
+  TrendingUp,
+  Scale,
+  Calendar,
   DollarSign,
+  Download,
 } from 'lucide-react';
 import { formatPaiseToINR } from '@algions/domain';
 import { api } from '../api/client.js';
 
 export const AccountingGstScreen: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'GST' | 'DAY_BOOK' | 'ACCOUNTS' | 'EXPENSES' | 'SCHEDULE_H1'>('GST');
+  const [activeTab, setActiveTab] = useState<'GST' | 'DAY_BOOK' | 'ACCOUNTS' | 'EXPENSES' | 'SCHEDULE_H1' | 'PL' | 'BALANCE_SHEET'>('GST');
   const [gstData, setGstData] = useState<any | null>(null);
   const [dayBook, setDayBook] = useState<any[]>([]);
   const [ledgers, setLedgers] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
   const [scheduleH1List, setScheduleH1List] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Financial Statements State (ACC-009, ACC-010)
+  const [plData, setPlData] = useState<any | null>(null);
+  const [balanceSheetData, setBalanceSheetData] = useState<any | null>(null);
+  const [plStartDate, setPlStartDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().slice(0, 10);
+  });
+  const [plEndDate, setPlEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [loadingStatements, setLoadingStatements] = useState(false);
 
   // Expense Form State
   const [showExpenseModal, setShowExpenseModal] = useState(false);
@@ -60,8 +75,25 @@ export const AccountingGstScreen: React.FC = () => {
     }
   };
 
+  const fetchFinancials = async () => {
+    setLoadingStatements(true);
+    try {
+      const [plRes, bsRes] = await Promise.all([
+        api.getProfitAndLoss(plStartDate, plEndDate),
+        api.getBalanceSheet(),
+      ]);
+      setPlData(plRes);
+      setBalanceSheetData(bsRes);
+    } catch (err) {
+      console.error('Error fetching financial statements:', err);
+    } finally {
+      setLoadingStatements(false);
+    }
+  };
+
   useEffect(() => {
     fetchData();
+    fetchFinancials();
   }, []);
 
   const handleCreateExpense = async (e: React.FormEvent) => {
@@ -172,14 +204,47 @@ export const AccountingGstScreen: React.FC = () => {
               <ShieldAlert className="w-3.5 h-3.5 text-amber-500" />
               <span>Schedule H1</span>
             </button>
+
+            <button
+              onClick={() => {
+                setActiveTab('PL');
+                fetchFinancials();
+              }}
+              className={`px-3 py-1.5 rounded-md text-xs font-bold transition flex items-center gap-1.5 ${
+                activeTab === 'PL'
+                  ? 'bg-teal-600 text-white shadow'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <TrendingUp className="w-3.5 h-3.5" />
+              <span>Profit & Loss</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveTab('BALANCE_SHEET');
+                fetchFinancials();
+              }}
+              className={`px-3 py-1.5 rounded-md text-xs font-bold transition flex items-center gap-1.5 ${
+                activeTab === 'BALANCE_SHEET'
+                  ? 'bg-teal-600 text-white shadow'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Scale className="w-3.5 h-3.5" />
+              <span>Balance Sheet</span>
+            </button>
           </div>
 
           <button
-            onClick={fetchData}
+            onClick={() => {
+              fetchData();
+              fetchFinancials();
+            }}
             className="p-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-50 text-slate-600 transition"
             title="Refresh"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${loading || loadingStatements ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </div>
@@ -549,6 +614,426 @@ export const AccountingGstScreen: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* TAB 6: PROFIT & LOSS STATEMENT (ACC-009) */}
+      {activeTab === 'PL' && (
+        <div className="flex-1 flex flex-col gap-4 overflow-hidden">
+          {/* Controls Bar */}
+          <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <Calendar className="w-4 h-4 text-teal-600" />
+                Accounting Period:
+              </span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={plStartDate}
+                  onChange={(e) => setPlStartDate(e.target.value)}
+                  className="px-2.5 py-1 bg-slate-50 border border-slate-300 rounded text-xs font-medium text-slate-800"
+                />
+                <span className="text-xs text-slate-400">to</span>
+                <input
+                  type="date"
+                  value={plEndDate}
+                  onChange={(e) => setPlEndDate(e.target.value)}
+                  className="px-2.5 py-1 bg-slate-50 border border-slate-300 rounded text-xs font-medium text-slate-800"
+                />
+                <button
+                  onClick={fetchFinancials}
+                  className="px-3 py-1 bg-teal-600 hover:bg-teal-700 text-white rounded text-xs font-bold transition shadow-sm"
+                >
+                  Apply Filter
+                </button>
+              </div>
+            </div>
+
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>Print Statement</span>
+            </button>
+          </div>
+
+          {/* Metric Highlights */}
+          {plData && (
+            <div className="grid grid-cols-4 gap-4">
+              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                  Net Taxable Revenue
+                </span>
+                <div className="text-xl font-black text-slate-900 mt-1">
+                  {formatPaiseToINR(plData.taxableSalesPaise)}
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5">
+                  Gross: {formatPaiseToINR(plData.grossSalesPaise)} • Dis: -{formatPaiseToINR(plData.discountsPaise)}
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                  Cost of Goods Sold (COGS)
+                </span>
+                <div className="text-xl font-black text-slate-700 mt-1">
+                  {formatPaiseToINR(plData.cogsPaise)}
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5">
+                  Batch acquisition cost of medicines sold
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                    Gross Profit
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200">
+                    {plData.grossMarginPercent}% Margin
+                  </span>
+                </div>
+                <div className="text-xl font-black text-teal-600 mt-1">
+                  {formatPaiseToINR(plData.grossProfitPaise)}
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5">
+                  Taxable Sales minus Batch COGS
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                  Net Operating Profit
+                </span>
+                <div
+                  className={`text-xl font-black mt-1 ${
+                    plData.netOperatingProfitPaise >= 0 ? 'text-teal-700' : 'text-rose-600'
+                  }`}
+                >
+                  {formatPaiseToINR(plData.netOperatingProfitPaise)}
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5">
+                  Operating Overhead: {formatPaiseToINR(plData.totalOperatingExpensesPaise)}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Detailed Financial Statement Grid */}
+          {plData && (
+            <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+              <div className="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                <div className="text-xs font-bold text-slate-800">
+                  Income & Expenditure Statement (Standard Pharmacy Schedule)
+                </div>
+                <div className="text-xs font-mono text-slate-500">
+                  Currency: INR (₹) • Exact Integer Paise Precision
+                </div>
+              </div>
+
+              <div className="overflow-y-auto flex-1 p-6 space-y-6">
+                {/* SECTION 1: REVENUE */}
+                <div>
+                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider border-b pb-1 mb-2">
+                    1. Revenue from Pharmacy Operations
+                  </h4>
+                  <table className="w-full text-xs">
+                    <tbody className="divide-y divide-slate-100">
+                      <tr>
+                        <td className="py-2 text-slate-700">Gross Invoiced Pharmacy Sales</td>
+                        <td className="py-2 text-right font-mono font-semibold text-slate-900">
+                          {formatPaiseToINR(plData.grossSalesPaise)}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 text-slate-500 pl-4">Less: Promotional & Cash Discounts Allowed</td>
+                        <td className="py-2 text-right font-mono text-rose-600">
+                          - {formatPaiseToINR(plData.discountsPaise)}
+                        </td>
+                      </tr>
+                      <tr className="bg-slate-50/70 font-bold">
+                        <td className="py-2 pl-2 text-slate-900">Net Taxable Revenue (A)</td>
+                        <td className="py-2 text-right font-mono text-slate-900">
+                          {formatPaiseToINR(plData.taxableSalesPaise)}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* SECTION 2: COGS */}
+                <div>
+                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider border-b pb-1 mb-2">
+                    2. Cost of Goods Sold (Direct Costs)
+                  </h4>
+                  <table className="w-full text-xs">
+                    <tbody className="divide-y divide-slate-100">
+                      <tr>
+                        <td className="py-2 text-slate-700">Cost of Batches Sold (at Purchase Acquisition Rate)</td>
+                        <td className="py-2 text-right font-mono font-semibold text-slate-700">
+                          - {formatPaiseToINR(plData.cogsPaise)}
+                        </td>
+                      </tr>
+                      <tr className="bg-teal-50/60 font-bold text-teal-900">
+                        <td className="py-2.5 pl-2">Gross Profit (A - B)</td>
+                        <td className="py-2.5 text-right font-mono text-teal-800 text-sm">
+                          {formatPaiseToINR(plData.grossProfitPaise)} ({plData.grossMarginPercent}%)
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* SECTION 3: OPERATING EXPENSES */}
+                <div>
+                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider border-b pb-1 mb-2">
+                    3. Operating Overheads & Admin Expenses
+                  </h4>
+                  <table className="w-full text-xs">
+                    <tbody className="divide-y divide-slate-100">
+                      {plData.operatingExpenses?.length === 0 ? (
+                        <tr>
+                          <td colSpan={2} className="py-3 text-slate-400 italic">
+                            No operating expense vouchers recorded in this period.
+                          </td>
+                        </tr>
+                      ) : (
+                        plData.operatingExpenses.map((exp: any, idx: number) => (
+                          <tr key={idx}>
+                            <td className="py-2 text-slate-700 flex items-center gap-2">
+                              <span className="font-mono text-slate-400">[{exp.accountCode}]</span>
+                              <span>{exp.accountName}</span>
+                            </td>
+                            <td className="py-2 text-right font-mono text-slate-700">
+                              {formatPaiseToINR(exp.amountPaise)}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                      <tr className="bg-slate-50/70 font-bold">
+                        <td className="py-2 pl-2 text-slate-900">Total Operating Expenses (C)</td>
+                        <td className="py-2 text-right font-mono text-slate-900">
+                          - {formatPaiseToINR(plData.totalOperatingExpensesPaise)}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* SECTION 4: NET PROFIT */}
+                <div className="pt-2 border-t-2 border-slate-900">
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-slate-900 text-white">
+                    <div>
+                      <div className="text-sm font-bold">Net Operating Profit / (Loss)</div>
+                      <div className="text-[10px] text-slate-400">
+                        Gross Profit minus Total Operating Overheads
+                      </div>
+                    </div>
+                    <div className="text-xl font-black font-mono text-teal-400">
+                      {formatPaiseToINR(plData.netOperatingProfitPaise)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 7: BALANCE SHEET (ACC-010) */}
+      {activeTab === 'BALANCE_SHEET' && balanceSheetData && (() => {
+        const assets = balanceSheetData.assets || balanceSheetData.currentAssets || {};
+        const liabilities = balanceSheetData.liabilities || balanceSheetData.currentLiabilities || {};
+        const equity = balanceSheetData.equity || {};
+        const totalAssets = assets.totalAssetsPaise || assets.totalCurrentAssetsPaise || 0;
+        const totalLiabilities = liabilities.totalLiabilitiesPaise || liabilities.totalCurrentLiabilitiesPaise || 0;
+        const totalLiabilitiesAndEquity = equity.totalEquityAndLiabilitiesPaise || balanceSheetData.totalLiabilitiesAndEquityPaise || (totalLiabilities + (equity.retainedEarningsPaise || 0));
+        const isBalanced = totalAssets === totalLiabilitiesAndEquity;
+
+        return (
+          <div className="flex-1 flex flex-col gap-4 overflow-hidden">
+            {/* Controls Bar */}
+            <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <Scale className="w-4 h-4 text-teal-600" />
+                  Balance Sheet as of:
+                </span>
+                <span className="text-xs font-mono font-semibold text-slate-900 bg-slate-100 px-2.5 py-1 rounded">
+                  {new Date(balanceSheetData.asOf).toLocaleString('en-IN', {
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </span>
+
+                <span
+                  className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                    isBalanced
+                      ? 'bg-teal-50 text-teal-700 border border-teal-200'
+                      : 'bg-rose-50 text-rose-700 border border-rose-200'
+                  }`}
+                >
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  <span>{isBalanced ? 'Books Balanced' : 'Imbalance Detected'}</span>
+                </span>
+              </div>
+
+              <button
+                onClick={() => window.print()}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Print Balance Sheet</span>
+              </button>
+            </div>
+
+            {/* Two Column Balance Sheet */}
+            <div className="flex-1 grid grid-cols-2 gap-4 overflow-hidden">
+              {/* ASSETS COLUMN */}
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
+                <div className="p-3 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                  <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Assets (Applications of Funds)
+                  </span>
+                  <span className="text-[11px] font-mono text-slate-500">Classification</span>
+                </div>
+
+                <div className="p-4 flex-1 overflow-y-auto space-y-4">
+                  <div>
+                    <h5 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                      Current Assets
+                    </h5>
+                    <table className="w-full text-xs">
+                      <tbody className="divide-y divide-slate-100">
+                        <tr>
+                          <td className="py-2.5 text-slate-800">
+                            <div className="font-semibold">Cash in Hand</div>
+                            <div className="text-[10px] text-slate-400 font-mono">Account [1000] • Cash Drawer</div>
+                          </td>
+                          <td className="py-2.5 text-right font-mono font-bold text-slate-900">
+                            {formatPaiseToINR(assets.cashInHandPaise || 0)}
+                          </td>
+                        </tr>
+
+                        <tr>
+                          <td className="py-2.5 text-slate-800">
+                            <div className="font-semibold">Bank & Digital Accounts</div>
+                            <div className="text-[10px] text-slate-400 font-mono">Account [1010] • Current A/C & UPI</div>
+                          </td>
+                          <td className="py-2.5 text-right font-mono font-bold text-slate-900">
+                            {formatPaiseToINR(assets.bankBalancePaise || 0)}
+                          </td>
+                        </tr>
+
+                        <tr>
+                          <td className="py-2.5 text-slate-800">
+                            <div className="font-semibold">Customer Trade Receivables</div>
+                            <div className="text-[10px] text-slate-400 font-mono">Account [1200] • Khata Ledgers</div>
+                          </td>
+                          <td className="py-2.5 text-right font-mono font-bold text-slate-900">
+                            {formatPaiseToINR(assets.customerReceivablesPaise || 0)}
+                          </td>
+                        </tr>
+
+                        <tr>
+                          <td className="py-2.5 text-slate-800">
+                            <div className="font-semibold">Merchandise Inventory (at Cost)</div>
+                            <div className="text-[10px] text-slate-400 font-mono">Account [1300] • Active FEFO Batches</div>
+                          </td>
+                          <td className="py-2.5 text-right font-mono font-bold text-slate-900">
+                            {formatPaiseToINR(assets.inventoryValuationPaise || assets.inventoryCostPaise || 0)}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Assets Total Footer */}
+                <div className="p-3 bg-teal-50/60 border-t border-teal-100 flex items-center justify-between">
+                  <span className="text-xs font-bold text-teal-900">TOTAL ASSETS</span>
+                  <span className="text-base font-black font-mono text-teal-900">
+                    {formatPaiseToINR(totalAssets)}
+                  </span>
+                </div>
+              </div>
+
+              {/* LIABILITIES & EQUITY COLUMN */}
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
+                <div className="p-3 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                  <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Liabilities & Owner's Equity
+                  </span>
+                  <span className="text-[11px] font-mono text-slate-500">Classification</span>
+                </div>
+
+                <div className="p-4 flex-1 overflow-y-auto space-y-4">
+                  {/* Current Liabilities */}
+                  <div>
+                    <h5 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                      Current Liabilities
+                    </h5>
+                    <table className="w-full text-xs">
+                      <tbody className="divide-y divide-slate-100">
+                        <tr>
+                          <td className="py-2.5 text-slate-800">
+                            <div className="font-semibold">Supplier Trade Payables</div>
+                            <div className="text-[10px] text-slate-400 font-mono">Account [2000] • Distributor Invoices</div>
+                          </td>
+                          <td className="py-2.5 text-right font-mono font-bold text-slate-900">
+                            {formatPaiseToINR(liabilities.supplierPayablesPaise || 0)}
+                          </td>
+                        </tr>
+
+                        <tr>
+                          <td className="py-2.5 text-slate-800">
+                            <div className="font-semibold">GST Output Tax Payable</div>
+                            <div className="text-[10px] text-slate-400 font-mono">Account [2200] • CGST & SGST Collected</div>
+                          </td>
+                          <td className="py-2.5 text-right font-mono font-bold text-slate-900">
+                            {formatPaiseToINR(liabilities.gstPayablePaise || liabilities.gstOutputPayablePaise || 0)}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Owner's Equity */}
+                  <div>
+                    <h5 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                      Owner's Capital & Retained Earnings
+                    </h5>
+                    <table className="w-full text-xs">
+                      <tbody className="divide-y divide-slate-100">
+                        <tr>
+                          <td className="py-2.5 text-slate-800">
+                            <div className="font-semibold">Retained Earnings / Store Surplus</div>
+                            <div className="text-[10px] text-slate-400 font-mono">Account [3000] • Cumulative Net Reserves</div>
+                          </td>
+                          <td className="py-2.5 text-right font-mono font-bold text-teal-700">
+                            {formatPaiseToINR(equity.retainedEarningsPaise || 0)}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Liabilities & Equity Total Footer */}
+                <div className="p-3 bg-teal-50/60 border-t border-teal-100 flex items-center justify-between">
+                  <span className="text-xs font-bold text-teal-900">TOTAL LIABILITIES & EQUITY</span>
+                  <span className="text-base font-black font-mono text-teal-900">
+                    {formatPaiseToINR(totalLiabilitiesAndEquity)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Record Expense Modal */}
       {showExpenseModal && (

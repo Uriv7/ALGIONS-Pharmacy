@@ -424,6 +424,34 @@ export class ApiClient {
       body: JSON.stringify(payload),
     });
   }
+
+  async getProfitAndLoss(startDate?: string, endDate?: string): Promise<any> {
+    const params = new URLSearchParams();
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return this.request<any>(`/accounting/profit-and-loss${qs}`);
+  }
+
+  async getBalanceSheet(): Promise<any> {
+    return this.request<any>('/accounting/balance-sheet');
+  }
+
+  async exportProductsCsv(): Promise<string> {
+    const res = await fetch('http://localhost:3001/products/export/csv', {
+      headers: {
+        Authorization: `Bearer ${this.token}`,
+      },
+    });
+    return res.text();
+  }
+
+  async importProductsCsv(rows: any[]): Promise<any> {
+    return this.request<any>('/products/import/csv', {
+      method: 'POST',
+      body: JSON.stringify({ rows }),
+    });
+  }
 }
 
 export const api = new ApiClient();

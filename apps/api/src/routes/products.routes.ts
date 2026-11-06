@@ -314,3 +314,139 @@ productsRouter.delete('/:id', authenticateToken, requireOwner, async (req: Reque
     next(err);
   }
 });
+
+// GET /products/export/csv (Bulk Medicine Master CSV Export - MED-008)
+productsRouter.get('/export/csv', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const storeId = req.user!.storeId;
+    const products = await req.db.query(
+      `SELECT p.brand_name, p.generic_name, p.strength, p.dosage_form,
+              p.manufacturer, p.barcodes, p.hsn_code, p.tax_rate_percent,
+              p.units_per_pack, p.rack_location, p.reorder_level,
+              COALESCE((SELECT SUM(quantity) FROM batches WHERE product_id = p.id AND quantity > 0), 0) as current_stock
+       FROM products p
+       WHERE p.store_id = $1 AND p.is_active = 1
+       ORDER BY p.brand_name ASC`,
+      [storeId]
+    );
+
+    const headers = [
+      'Brand Name',
+      'Generic Name',
+      'Strength',
+      'Dosage Form',
+      'Manufacturer',
+      'Barcodes',
+      'HSN Code',
+      'Tax Rate %',
+      'Units Per Pack',
+      'Rack Location',
+      'Reorder Level',
+      'Current Stock',
+    ];
+
+    const csvRows = [headers.join(',')];
+
+    for (const r of products.rows as any[]) {
+      const escape = (val: any) => {
+        const str = String(val ?? '').replace(/"/g, '""');
+        return `"${str}"`;
+      };
+
+      const barcodes = JSON.parse(r.barcodes || '[]').join(';');
+
+      csvRows.push(
+        [
+          escape(r.brand_name),
+          escape(r.generic_name),
+          escape(r.strength),
+          escape(r.dosage_form),
+          escape(r.manufacturer),
+          escape(barcodes),
+          escape(r.hsn_code),
+          r.tax_rate_percent,
+          r.units_per_pack,
+          escape(r.rack_location || ''),
+          r.reorder_level,
+          r.current_stock,
+        ].join(',')
+      );
+    }
+
+    const csvString = csvRows.join('\r\n');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="algions_medicine_catalogue.csv"');
+    res.send(csvString);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /products/import/csv (Bulk Medicine Master CSV Import - MED-008)
+productsRouter.post('/import/csv', authenticateToken, requireOwner, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { rows } = req.body;
+    if (!Array.isArray(rows) || rows.length === 0) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'No Rows Provided', 'Payload must contain a non-empty rows array.');
+    }
+
+    const storeId = req.user!.storeId;
+    const nowIso = new Date().toISOString();
+    let imported = 0;
+    const errors: string[] = [];
+
+    await req.db.transaction(async (tx) => {
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
+        if (!r.brandName || !r.genericName) {
+          errors.push(`Row ${i + 1}: Missing Brand Name or Generic Name.`);
+          continue;
+        }
+
+        const newId = generateUUIDv7();
+        const barcodesJson = JSON.stringify(
+          Array.isArray(r.barcodes) ? r.barcodes : r.barcode ? [r.barcode] : []
+        );
+
+        await tx.execute(
+          `INSERT INTO products (
+            id, store_id, brand_name, generic_name, strength, dosage_form, manufacturer,
+            barcodes, hsn_code, tax_category, tax_rate_percent, units_per_pack,
+            pack_unit_label, loose_unit_label, rack_location, reorder_level, is_active, created_at, updated_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 1, $17, $18)`,
+          [
+            newId,
+            storeId,
+            r.brandName.trim(),
+            r.genericName.trim(),
+            r.strength?.trim() || '',
+            r.dosageForm || 'TABLET',
+            r.manufacturer?.trim() || 'Generic Lab',
+            barcodesJson,
+            r.hsnCode || '3004',
+            r.taxCategory || 'GST_12',
+            Number(r.taxRatePercent) || 12,
+            Number(r.unitsPerPack) || 10,
+            r.packUnitLabel || 'Strip',
+            r.looseUnitLabel || 'Tablet',
+            r.rackLocation?.trim() || 'Shelf',
+            Number(r.reorderLevel) || 10,
+            nowIso,
+            nowIso,
+          ]
+        );
+        imported++;
+      }
+    });
+
+    res.json({
+      success: true,
+      imported,
+      errorsCount: errors.length,
+      errors,
+      message: `Successfully imported ${imported} formulations.`,
+    });
+  } catch (err) {
+    next(err);
+  }
+});

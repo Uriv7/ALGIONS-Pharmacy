@@ -480,4 +480,171 @@ accountingRouter.get('/registers/schedule-h1', authenticateToken, async (req: Re
   }
 });
 
+// GET /accounting/profit-and-loss (Financial Statement: Profit & Loss - ACC-009)
+accountingRouter.get('/profit-and-loss', authenticateToken, requireOwner, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const storeId = req.user!.storeId;
+    const startDate = (req.query.startDate as string) || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const endDate = (req.query.endDate as string) || new Date().toISOString().slice(0, 10);
+
+    // 1. Sales & Revenue
+    const salesAgg = await req.db.queryOne<{
+      gross_sales: number;
+      discounts: number;
+      taxable_sales: number;
+      tax_collected: number;
+    }>(
+      `SELECT SUM(gross_total_paise) as gross_sales,
+              SUM(total_discount_paise) as discounts,
+              SUM(taxable_total_paise) as taxable_sales,
+              SUM(tax_total_paise) as tax_collected
+       FROM sales_invoices
+       WHERE store_id = $1 AND status = 'POSTED'
+         AND created_at >= $2 AND created_at <= $3`,
+      [storeId, `${startDate}T00:00:00`, `${endDate}T23:59:59`]
+    );
+
+    const grossSalesPaise = Number(salesAgg?.gross_sales || 0);
+    const discountsPaise = Number(salesAgg?.discounts || 0);
+    const taxableSalesPaise = Number(salesAgg?.taxable_sales || 0);
+
+    // 2. Cost of Goods Sold (COGS)
+    const cogsAgg = await req.db.queryOne<{ total_cogs: number }>(
+      `SELECT SUM(l.quantity * COALESCE(b.purchase_rate_paise, 0)) as total_cogs
+       FROM sales_lines l
+       JOIN batches b ON l.batch_id = b.id
+       JOIN sales_invoices i ON l.sales_invoice_id = i.id
+       WHERE i.store_id = $1 AND i.status = 'POSTED'
+         AND i.created_at >= $2 AND i.created_at <= $3`,
+      [storeId, `${startDate}T00:00:00`, `${endDate}T23:59:59`]
+    );
+    const cogsPaise = Number(cogsAgg?.total_cogs || 0);
+
+    const grossProfitPaise = taxableSalesPaise - cogsPaise;
+    const grossMarginPercent = taxableSalesPaise > 0 ? Number(((grossProfitPaise / taxableSalesPaise) * 100).toFixed(2)) : 0;
+
+    // 3. Operating Expenses by Head
+    const expRows = await req.db.query<{
+      account_code: string;
+      account_name: string;
+      total_expense: number;
+    }>(
+      `SELECT account_code, account_name, SUM(debit_paise) as total_expense
+       FROM ledger_entries
+       WHERE store_id = $1 AND category = 'EXPENSE'
+         AND entry_date >= $2 AND entry_date <= $3
+       GROUP BY account_code, account_name
+       ORDER BY account_code ASC`,
+      [storeId, startDate, endDate]
+    );
+
+    const expensesList = expRows.rows.map((r) => ({
+      accountCode: r.account_code,
+      accountName: r.account_name,
+      amountPaise: Number(r.total_expense || 0),
+    }));
+
+    const totalOperatingExpensesPaise = expensesList.reduce((acc, curr) => acc + curr.amountPaise, 0);
+    const netOperatingProfitPaise = grossProfitPaise - totalOperatingExpensesPaise;
+
+    res.json({
+      startDate,
+      endDate,
+      grossSalesPaise,
+      discountsPaise,
+      taxableSalesPaise,
+      cogsPaise,
+      grossProfitPaise,
+      grossMarginPercent,
+      operatingExpenses: expensesList,
+      totalOperatingExpensesPaise,
+      netOperatingProfitPaise,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /accounting/balance-sheet (Financial Statement: Balance Sheet - ACC-010)
+accountingRouter.get('/balance-sheet', authenticateToken, requireOwner, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const storeId = req.user!.storeId;
+    const asOf = new Date().toISOString();
+
+    // 1. Cash in Hand (Account 1000)
+    const cash = await req.db.queryOne<{ debit: number; credit: number }>(
+      `SELECT SUM(debit_paise) as debit, SUM(credit_paise) as credit
+       FROM ledger_entries WHERE store_id = $1 AND account_code = '1000'`,
+      [storeId]
+    );
+    const cashInHandPaise = Number(cash?.debit || 0) - Number(cash?.credit || 0);
+
+    // 2. Bank Balance (Account 1010)
+    const bank = await req.db.queryOne<{ debit: number; credit: number }>(
+      `SELECT SUM(debit_paise) as debit, SUM(credit_paise) as credit
+       FROM ledger_entries WHERE store_id = $1 AND account_code = '1010'`,
+      [storeId]
+    );
+    const bankBalancePaise = Number(bank?.debit || 0) - Number(bank?.credit || 0);
+
+    // 3. Trade Receivables (Account 1200 / Customer Khata)
+    const cus = await req.db.queryOne<{ total_receivables: number }>(
+      'SELECT SUM(outstanding_balance_paise) as total_receivables FROM customers WHERE store_id = $1 AND is_active = 1',
+      [storeId]
+    );
+    const customerReceivablesPaise = Number(cus?.total_receivables || 0);
+
+    // 4. Closing Inventory Valuation at Purchase Cost (Account 1300)
+    const stock = await req.db.queryOne<{ valuation: number }>(
+      'SELECT SUM(quantity * purchase_rate_paise) as valuation FROM batches WHERE store_id = $1 AND quantity > 0',
+      [storeId]
+    );
+    const inventoryValuationPaise = Number(stock?.valuation || 0);
+
+    const totalAssetsPaise = Math.max(0, cashInHandPaise) + Math.max(0, bankBalancePaise) + customerReceivablesPaise + inventoryValuationPaise;
+
+    // 5. Trade Payables (Account 2000 / Supplier Ledgers)
+    const sup = await req.db.queryOne<{ total_payables: number }>(
+      `SELECT COALESCE(SUM(p.total_amount_paise), 0) - COALESCE(
+        (SELECT SUM(l.debit_paise) FROM ledger_entries l WHERE l.store_id = $1 AND l.account_code = '2000'), 0
+      ) as total_payables
+       FROM purchase_invoices p WHERE p.store_id = $1`,
+      [storeId]
+    );
+    const supplierPayablesPaise = Math.max(0, Number(sup?.total_payables || 0));
+
+    // 6. GST Output Payable (Account 2200)
+    const gstOut = await req.db.queryOne<{ output_gst: number }>(
+      'SELECT SUM(tax_total_paise) as output_gst FROM sales_invoices WHERE store_id = $1 AND status = \'POSTED\'',
+      [storeId]
+    );
+    const gstPayablePaise = Number(gstOut?.output_gst || 0);
+
+    const totalLiabilitiesPaise = supplierPayablesPaise + gstPayablePaise;
+    const retainedEarningsPaise = totalAssetsPaise - totalLiabilitiesPaise;
+
+    res.json({
+      asOf,
+      assets: {
+        cashInHandPaise: Math.max(0, cashInHandPaise),
+        bankBalancePaise: Math.max(0, bankBalancePaise),
+        customerReceivablesPaise,
+        inventoryValuationPaise,
+        totalAssetsPaise,
+      },
+      liabilities: {
+        supplierPayablesPaise,
+        gstPayablePaise,
+        totalLiabilitiesPaise,
+      },
+      equity: {
+        retainedEarningsPaise,
+        totalEquityAndLiabilitiesPaise: totalLiabilitiesPaise + retainedEarningsPaise,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 
