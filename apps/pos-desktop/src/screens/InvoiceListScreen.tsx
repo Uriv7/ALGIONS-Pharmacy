@@ -1,17 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Printer, Search, RefreshCw } from 'lucide-react';
+import { FileText, Printer, Search, RefreshCw, RotateCcw, AlertOctagon } from 'lucide-react';
 import { api } from '../api/client.js';
 import { formatPaiseToINR } from '@algions/domain';
-import { StatusChip } from '@algions/ui';
+import { SalesReturnDialog } from '../components/dialogs/SalesReturnDialog.js';
+import { VoidInvoiceDialog } from '../components/dialogs/VoidInvoiceDialog.js';
+import { AuthSessionUser } from '@algions/contracts';
 
 interface InvoiceListScreenProps {
+  user: AuthSessionUser;
   onReprintInvoice: (invoiceId: string) => void;
 }
 
-export const InvoiceListScreen: React.FC<InvoiceListScreenProps> = ({ onReprintInvoice }) => {
+export const InvoiceListScreen: React.FC<InvoiceListScreenProps> = ({ user, onReprintInvoice }) => {
   const [invoices, setInvoices] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
+
+  // Return & Void dialog state
+  const [activeReturnInvoice, setActiveReturnInvoice] = useState<any | null>(null);
+  const [activeVoidInvoice, setActiveVoidInvoice] = useState<any | null>(null);
 
   const fetchInvoices = async () => {
     setLoading(true);
@@ -29,6 +36,15 @@ export const InvoiceListScreen: React.FC<InvoiceListScreenProps> = ({ onReprintI
     fetchInvoices();
   }, []);
 
+  const handleOpenReturn = async (invSummary: any) => {
+    try {
+      const fullInvoice = await api.getInvoice(invSummary.id);
+      setActiveReturnInvoice(fullInvoice);
+    } catch (err) {
+      console.error('Error fetching invoice details:', err);
+    }
+  };
+
   const filtered = invoices.filter((inv) => {
     const term = searchTerm.toLowerCase();
     return (
@@ -42,9 +58,9 @@ export const InvoiceListScreen: React.FC<InvoiceListScreenProps> = ({ onReprintI
     <div className="flex-1 flex flex-col p-6 bg-slate-100 overflow-hidden select-none">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-800">Sales Invoices & History (P3)</h2>
+          <h2 className="text-xl font-bold text-slate-800">Sales Invoices & Returns (P3 / RET-001)</h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Immutable invoice archive • Single-click reprint and tax receipt audit
+            Immutable invoice archive • Sales returns & Restock • Void reversals (Owner step-up)
           </p>
         </div>
 
@@ -82,7 +98,7 @@ export const InvoiceListScreen: React.FC<InvoiceListScreenProps> = ({ onReprintI
                 <th className="py-2.5 px-3 text-right">Grand Total</th>
                 <th className="py-2.5 px-3 text-center">Origin</th>
                 <th className="py-2.5 px-3 text-center">Status</th>
-                <th className="py-2.5 px-4 text-center">Reprint</th>
+                <th className="py-2.5 px-4 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -141,13 +157,38 @@ export const InvoiceListScreen: React.FC<InvoiceListScreenProps> = ({ onReprintI
                       </span>
                     </td>
                     <td className="py-2.5 px-4 text-center">
-                      <button
-                        onClick={() => onReprintInvoice(inv.id)}
-                        className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-teal-700 transition"
-                        title="Reprint receipt (ESC/POS)"
-                      >
-                        <Printer className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center justify-center gap-1">
+                        {/* Print */}
+                        <button
+                          onClick={() => onReprintInvoice(inv.id)}
+                          className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-teal-700 transition"
+                          title="Reprint receipt (ESC/POS)"
+                        >
+                          <Printer className="w-4 h-4" />
+                        </button>
+
+                        {/* Sales Return (if POSTED) */}
+                        {inv.status === 'POSTED' && (
+                          <button
+                            onClick={() => handleOpenReturn(inv)}
+                            className="p-1.5 rounded hover:bg-teal-50 text-slate-500 hover:text-teal-700 transition"
+                            title="Process Return / Restock (RET-001)"
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                          </button>
+                        )}
+
+                        {/* Void Invoice (Owner only, if POSTED) */}
+                        {user.accountType === 'OWNER' && inv.status === 'POSTED' && (
+                          <button
+                            onClick={() => setActiveVoidInvoice(inv)}
+                            className="p-1.5 rounded hover:bg-red-50 text-slate-500 hover:text-red-600 transition"
+                            title="Void & Reverse Invoice (Owner Step-Up)"
+                          >
+                            <AlertOctagon className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -156,6 +197,30 @@ export const InvoiceListScreen: React.FC<InvoiceListScreenProps> = ({ onReprintI
           </table>
         </div>
       </div>
+
+      {/* Return Dialog */}
+      {activeReturnInvoice && (
+        <SalesReturnDialog
+          invoice={activeReturnInvoice}
+          onClose={() => setActiveReturnInvoice(null)}
+          onSuccess={() => {
+            setActiveReturnInvoice(null);
+            fetchInvoices();
+          }}
+        />
+      )}
+
+      {/* Void Dialog */}
+      {activeVoidInvoice && (
+        <VoidInvoiceDialog
+          invoice={activeVoidInvoice}
+          onClose={() => setActiveVoidInvoice(null)}
+          onSuccess={() => {
+            setActiveVoidInvoice(null);
+            fetchInvoices();
+          }}
+        />
+      )}
     </div>
   );
 };

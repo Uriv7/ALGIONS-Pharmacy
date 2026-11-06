@@ -7,9 +7,12 @@ import {
   Clock,
   Boxes,
   Users,
-  Settings,
   AlertCircle,
   LayoutDashboard,
+  Calendar,
+  Calculator,
+  Server,
+  UserCheck,
 } from 'lucide-react';
 import { AccountType } from '@algions/contracts';
 
@@ -19,11 +22,14 @@ export type ActiveScreen =
   | 'STOCK'
   | 'PURCHASES'
   | 'INVOICES'
+  | 'CUSTOMERS'
+  | 'EXPIRY'
   | 'HELD'
   | 'DASHBOARD'
+  | 'GST'
   | 'EXCEPTIONS'
   | 'STAFF'
-  | 'SETTINGS';
+  | 'SYSTEM';
 
 interface NavigationRailProps {
   activeScreen: ActiveScreen;
@@ -43,92 +49,120 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
   const isOwner = accountType === 'OWNER';
 
   return (
-    <aside className="w-16 bg-slate-900 flex flex-col items-center py-3 select-none flex-shrink-0 z-10">
-      <div className="flex flex-col gap-2 w-full px-2">
+    <aside className="w-16 bg-slate-900 flex flex-col items-center py-2 select-none flex-shrink-0 z-10 overflow-y-auto">
+      <div className="flex flex-col gap-1.5 w-full px-1.5">
         {/* POS Billing Screen (P1) */}
         <button
           onClick={() => onSelectScreen('POS')}
-          className={`flex flex-col items-center justify-center p-2 rounded-lg transition text-[10px] font-medium w-full ${
+          className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition text-[9px] font-medium w-full ${
             activeScreen === 'POS'
               ? 'bg-teal-600 text-white shadow'
               : 'text-slate-400 hover:text-white hover:bg-slate-800'
           }`}
           title="POS Counter (F1)"
         >
-          <ShoppingCart className="w-5 h-5 mb-1" />
+          <ShoppingCart className="w-4 h-4 mb-0.5" />
           <span>Billing</span>
         </button>
 
         {/* Medicine Search (M1) */}
         <button
           onClick={() => onSelectScreen('SEARCH')}
-          className={`flex flex-col items-center justify-center p-2 rounded-lg transition text-[10px] font-medium w-full ${
+          className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition text-[9px] font-medium w-full ${
             activeScreen === 'SEARCH'
               ? 'bg-teal-600 text-white shadow'
               : 'text-slate-400 hover:text-white hover:bg-slate-800'
           }`}
           title="Medicine Search & Substitutes (F2)"
         >
-          <Search className="w-5 h-5 mb-1" />
+          <Search className="w-4 h-4 mb-0.5" />
           <span>Search</span>
         </button>
 
         {/* Stock Check (I1) */}
         <button
           onClick={() => onSelectScreen('STOCK')}
-          className={`flex flex-col items-center justify-center p-2 rounded-lg transition text-[10px] font-medium w-full ${
+          className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition text-[9px] font-medium w-full ${
             activeScreen === 'STOCK'
               ? 'bg-teal-600 text-white shadow'
               : 'text-slate-400 hover:text-white hover:bg-slate-800'
           }`}
           title="Stock Check & Batches (I1)"
         >
-          <Boxes className="w-5 h-5 mb-1" />
+          <Boxes className="w-4 h-4 mb-0.5" />
           <span>Stock</span>
         </button>
 
         {/* Purchase Entry (U1) */}
         <button
           onClick={() => onSelectScreen('PURCHASES')}
-          className={`flex flex-col items-center justify-center p-2 rounded-lg transition text-[10px] font-medium w-full ${
+          className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition text-[9px] font-medium w-full ${
             activeScreen === 'PURCHASES'
               ? 'bg-teal-600 text-white shadow'
               : 'text-slate-400 hover:text-white hover:bg-slate-800'
           }`}
           title="Purchase Goods Receipt (U1)"
         >
-          <Package className="w-5 h-5 mb-1" />
+          <Package className="w-4 h-4 mb-0.5" />
           <span>Purchase</span>
         </button>
 
-        {/* Invoices List & Reprint (P3) */}
+        {/* Invoices List & Returns (P3 / RET-001) */}
         <button
           onClick={() => onSelectScreen('INVOICES')}
-          className={`flex flex-col items-center justify-center p-2 rounded-lg transition text-[10px] font-medium w-full ${
+          className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition text-[9px] font-medium w-full ${
             activeScreen === 'INVOICES'
               ? 'bg-teal-600 text-white shadow'
               : 'text-slate-400 hover:text-white hover:bg-slate-800'
           }`}
-          title="Invoice History & Reprint (P3)"
+          title="Invoice History & Returns (P3 / RET-001)"
         >
-          <FileText className="w-5 h-5 mb-1" />
+          <FileText className="w-4 h-4 mb-0.5" />
           <span>Invoices</span>
+        </button>
+
+        {/* Customer Khata & Credit (CUS-001) */}
+        <button
+          onClick={() => onSelectScreen('CUSTOMERS')}
+          className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition text-[9px] font-medium w-full ${
+            activeScreen === 'CUSTOMERS'
+              ? 'bg-teal-600 text-white shadow'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800'
+          }`}
+          title="Customer Khata & Receivables (CUS-001)"
+        >
+          <UserCheck className="w-4 h-4 mb-0.5" />
+          <span>Khata</span>
+        </button>
+
+        {/* Expiry Control (EXP-001) */}
+        <button
+          onClick={() => onSelectScreen('EXPIRY')}
+          className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition text-[9px] font-medium w-full ${
+            activeScreen === 'EXPIRY'
+              ? 'bg-teal-600 text-white shadow'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800'
+          }`}
+          title="Expiry Management (EXP-001)"
+        >
+          <Calendar className="w-4 h-4 mb-0.5" />
+          <span>Expiry</span>
         </button>
 
         {/* Held Bills (P2) */}
         <button
           onClick={() => onSelectScreen('HELD')}
-          className={`relative flex flex-col items-center justify-center p-2 rounded-lg transition text-[10px] font-medium w-full ${
+          className={`relative flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition text-[9px] font-medium w-full ${
             activeScreen === 'HELD'
               ? 'bg-teal-600 text-white shadow'
               : 'text-slate-400 hover:text-white hover:bg-slate-800'
           }`}
           title="Held Bills (F6)"
         >
-          <Clock className="w-5 h-5 mb-1" />
+          <Clock className="w-4 h-4 mb-0.5" />
           <span>Held</span>
           {heldBillsCount > 0 && (
-            <span className="absolute top-1 right-1 w-4 h-4 bg-amber-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+            <span className="absolute top-0.5 right-0.5 w-3.5 h-3.5 bg-amber-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center">
               {heldBillsCount}
             </span>
           )}
@@ -142,31 +176,45 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
             {/* Owner Financial Dashboard (FES 8.4) */}
             <button
               onClick={() => onSelectScreen('DASHBOARD')}
-              className={`flex flex-col items-center justify-center p-2 rounded-lg transition text-[10px] font-medium w-full ${
+              className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition text-[9px] font-medium w-full ${
                 activeScreen === 'DASHBOARD'
                   ? 'bg-teal-600 text-white shadow'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800'
               }`}
               title="Owner Financial Dashboard"
             >
-              <LayoutDashboard className="w-5 h-5 mb-1" />
+              <LayoutDashboard className="w-4 h-4 mb-0.5" />
               <span>Metrics</span>
+            </button>
+
+            {/* GST & Double-Entry Accounting (GST-004 / ACC-005) */}
+            <button
+              onClick={() => onSelectScreen('GST')}
+              className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition text-[9px] font-medium w-full ${
+                activeScreen === 'GST'
+                  ? 'bg-teal-600 text-white shadow'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+              title="GST Compliance & Day Book"
+            >
+              <Calculator className="w-4 h-4 mb-0.5" />
+              <span>GST/Acc</span>
             </button>
 
             {/* Reconciliation Exceptions Queue (S2) */}
             <button
               onClick={() => onSelectScreen('EXCEPTIONS')}
-              className={`relative flex flex-col items-center justify-center p-2 rounded-lg transition text-[10px] font-medium w-full ${
+              className={`relative flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition text-[9px] font-medium w-full ${
                 activeScreen === 'EXCEPTIONS'
                   ? 'bg-teal-600 text-white shadow'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800'
               }`}
               title="Sync Reconciliation Exceptions (Owner only)"
             >
-              <AlertCircle className="w-5 h-5 mb-1 text-red-400" />
-              <span>Exceptions</span>
+              <AlertCircle className="w-4 h-4 mb-0.5 text-red-400" />
+              <span>Except</span>
               {exceptionsCount > 0 && (
-                <span className="absolute top-1 right-1 w-4 h-4 bg-red-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center animate-pulse">
+                <span className="absolute top-0.5 right-0.5 w-3.5 h-3.5 bg-red-600 text-white text-[8px] font-bold rounded-full flex items-center justify-center animate-pulse">
                   {exceptionsCount}
                 </span>
               )}
@@ -175,15 +223,29 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
             {/* Staff & Audit Trail (A1) */}
             <button
               onClick={() => onSelectScreen('STAFF')}
-              className={`flex flex-col items-center justify-center p-2 rounded-lg transition text-[10px] font-medium w-full ${
+              className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition text-[9px] font-medium w-full ${
                 activeScreen === 'STAFF'
                   ? 'bg-teal-600 text-white shadow'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800'
               }`}
               title="Staff Accounts & Tamper-Evident Audit Logs"
             >
-              <Users className="w-5 h-5 mb-1" />
+              <Users className="w-4 h-4 mb-0.5" />
               <span>Staff</span>
+            </button>
+
+            {/* Store & Offline Control (DEV-004) */}
+            <button
+              onClick={() => onSelectScreen('SYSTEM')}
+              className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition text-[9px] font-medium w-full ${
+                activeScreen === 'SYSTEM'
+                  ? 'bg-teal-600 text-white shadow'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+              title="Store Architecture & Offline Control"
+            >
+              <Server className="w-4 h-4 mb-0.5" />
+              <span>System</span>
             </button>
           </>
         )}

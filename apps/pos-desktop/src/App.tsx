@@ -9,6 +9,10 @@ import { InvoiceListScreen } from './screens/InvoiceListScreen.js';
 import { OwnerDashboardScreen } from './screens/OwnerDashboardScreen.js';
 import { ExceptionsScreen } from './screens/ExceptionsScreen.js';
 import { StaffManagementScreen } from './screens/StaffManagementScreen.js';
+import { CustomerManagementScreen } from './screens/CustomerManagementScreen.js';
+import { ExpiryManagementScreen } from './screens/ExpiryManagementScreen.js';
+import { AccountingGstScreen } from './screens/AccountingGstScreen.js';
+import { StoreControlScreen } from './screens/StoreControlScreen.js';
 import { LockScreen } from './components/LockScreen.js';
 import { ReceiptPrintDialog } from './components/dialogs/ReceiptPrintDialog.js';
 import { FullWidthBanner } from '@algions/ui';
@@ -264,12 +268,17 @@ export const App: React.FC = () => {
 
         {activeScreen === 'INVOICES' && (
           <InvoiceListScreen
+            user={user}
             onReprintInvoice={async (id) => {
               const inv = await api.getInvoice(id);
               setReprintInvoice(inv);
             }}
           />
         )}
+
+        {activeScreen === 'CUSTOMERS' && <CustomerManagementScreen />}
+
+        {activeScreen === 'EXPIRY' && <ExpiryManagementScreen user={user} />}
 
         {activeScreen === 'HELD' && (
           <POSScreen
@@ -282,9 +291,19 @@ export const App: React.FC = () => {
 
         {activeScreen === 'DASHBOARD' && <OwnerDashboardScreen />}
 
+        {activeScreen === 'GST' && <AccountingGstScreen />}
+
         {activeScreen === 'EXCEPTIONS' && <ExceptionsScreen />}
 
         {activeScreen === 'STAFF' && <StaffManagementScreen />}
+
+        {activeScreen === 'SYSTEM' && (
+          <StoreControlScreen
+            user={user}
+            isOffline={isOffline}
+            onToggleOffline={handleToggleOffline}
+          />
+        )}
       </div>
 
       {/* Quick Lock Screen Modal (A2) */}

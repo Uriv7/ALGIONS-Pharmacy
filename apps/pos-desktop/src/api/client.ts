@@ -215,6 +215,83 @@ export class ApiClient {
   async getAuditLogs(): Promise<{ logs: any[]; tamperCheckPassed: boolean }> {
     return this.request<{ logs: any[]; tamperCheckPassed: boolean }>('/owner/audit/logs');
   }
+
+  async createSalesReturn(payload: {
+    originalInvoiceId: string;
+    items: { batchId: string; quantity: number; isSellable: boolean; returnReason: string }[];
+  }): Promise<any> {
+    return this.request<any>('/pos/returns', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async voidInvoice(invoiceId: string, reason: string): Promise<any> {
+    return this.request<any>(`/pos/sales/${invoiceId}/void`, {
+      method: 'POST',
+      headers: {
+        'X-Step-Up-Token': 'owner-authorized-session',
+      },
+      body: JSON.stringify({ reason }),
+    });
+  }
+
+  async getCustomers(query?: string): Promise<{ customers: any[] }> {
+    const q = query ? `?q=${encodeURIComponent(query)}` : '';
+    return this.request<{ customers: any[] }>(`/customers${q}`);
+  }
+
+  async createCustomer(customer: any): Promise<any> {
+    return this.request<any>('/customers', {
+      method: 'POST',
+      body: JSON.stringify(customer),
+    });
+  }
+
+  async recordCustomerPayment(customerId: string, payload: { amountPaise: number; mode: string; notes?: string }): Promise<any> {
+    return this.request<any>(`/customers/${customerId}/payments`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getDoctors(): Promise<{ doctors: any[] }> {
+    return this.request<{ doctors: any[] }>('/doctors');
+  }
+
+  async createDoctor(doctor: any): Promise<any> {
+    return this.request<any>('/doctors', {
+      method: 'POST',
+      body: JSON.stringify(doctor),
+    });
+  }
+
+  async getDayBook(): Promise<{ dayBook: any[] }> {
+    return this.request<{ dayBook: any[] }>('/accounting/day-book');
+  }
+
+  async getLedgers(): Promise<{ accounts: any[] }> {
+    return this.request<{ accounts: any[] }>('/accounting/ledgers');
+  }
+
+  async getGstSummary(): Promise<any> {
+    return this.request<any>('/accounting/gst-summary');
+  }
+
+  async createStockAdjustment(payload: {
+    batchId: string;
+    adjustmentType: string;
+    deltaQuantity: number;
+    reason: string;
+  }): Promise<any> {
+    return this.request<any>('/stock/adjustments', {
+      method: 'POST',
+      headers: {
+        'X-Step-Up-Token': 'owner-authorized-session',
+      },
+      body: JSON.stringify(payload),
+    });
+  }
 }
 
 export const api = new ApiClient();

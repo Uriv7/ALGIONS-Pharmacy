@@ -5,6 +5,7 @@ import {
 } from '../middleware/auth.js';
 import { CustomerSchema, DoctorSchema } from '@algions/contracts';
 import { generateUUIDv7 } from '@algions/domain';
+import { AppError } from '../middleware/error.js';
 
 export const accountingRouter = Router();
 
@@ -199,6 +200,8 @@ accountingRouter.post('/customers', authenticateToken, async (req: Request, res:
   }
 });
 
+
+
 // GET /doctors
 accountingRouter.get('/doctors', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -241,3 +244,89 @@ accountingRouter.post('/doctors', authenticateToken, async (req: Request, res: R
     next(err);
   }
 });
+
+// POST /customers/:id/payments (Customer credit receipt settlement - ACC-003, CUS-003)
+accountingRouter.post('/customers/:id/payments', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const customerId = Array.isArray(req.params.id) ? req.params.id[0]! : req.params.id!;
+    const { amountPaise, mode, notes } = req.body;
+    if (!amountPaise || amountPaise <= 0) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'Invalid Amount', 'Payment amount must be greater than zero.');
+    }
+    const storeId = req.user!.storeId;
+    const nowIso = new Date().toISOString();
+    const paymentId = generateUUIDv7();
+
+    const customer = await req.db.queryOne<{ id: string; name: string; outstanding_balance_paise: number }>(
+      'SELECT id, name, outstanding_balance_paise FROM customers WHERE id = $1 AND store_id = $2',
+      [customerId, storeId]
+    );
+    if (!customer) throw new AppError(404, 'NOT_FOUND', 'Customer Not Found', 'Customer not found.');
+
+    await req.db.transaction(async (tx) => {
+      // 1. Reduce outstanding balance
+      await tx.execute(
+        'UPDATE customers SET outstanding_balance_paise = MAX(0, outstanding_balance_paise - $1) WHERE id = $2',
+        [amountPaise, customerId]
+      );
+
+      // 2. Post Ledger Entries (Debit Cash/Bank, Credit Customer Receivable)
+      const accountCode = mode === 'BANK' || mode === 'UPI' ? '1010' : '1000';
+      const accountName = mode === 'BANK' || mode === 'UPI' ? 'Bank Account' : 'Cash in Hand';
+
+      // Debit Asset (Cash/Bank)
+      await tx.execute(
+        `INSERT INTO ledger_entries (
+          id, store_id, transaction_id, entry_date, account_code, account_name,
+          category, debit_paise, credit_paise, narration, reference_document_type,
+          reference_document_id, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+        [
+          generateUUIDv7(),
+          storeId,
+          paymentId,
+          nowIso.slice(0, 10),
+          accountCode,
+          accountName,
+          'ASSET',
+          amountPaise,
+          0,
+          `Credit Receipt from ${customer.name}: ${notes || 'Customer settlement'}`,
+          'CUSTOMER_PAYMENT',
+          paymentId,
+          nowIso,
+        ]
+      );
+
+      // Credit Asset (Receivables)
+      await tx.execute(
+        `INSERT INTO ledger_entries (
+          id, store_id, transaction_id, entry_date, account_code, account_name,
+          category, debit_paise, credit_paise, narration, reference_document_type,
+          reference_document_id, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+        [
+          generateUUIDv7(),
+          storeId,
+          paymentId,
+          nowIso.slice(0, 10),
+          '1200',
+          'Customer Receivables',
+          'ASSET',
+          0,
+          amountPaise,
+          `Credit Receipt from ${customer.name}: ${notes || 'Customer settlement'}`,
+          'CUSTOMER_PAYMENT',
+          paymentId,
+          nowIso,
+        ]
+      );
+    });
+
+    res.json({ success: true, message: 'Customer payment recorded and ledger posted.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+
