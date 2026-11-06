@@ -195,3 +195,122 @@ productsRouter.post('/', authenticateToken, requireOwner, async (req: Request, r
     next(err);
   }
 });
+
+// GET /products (List all products for Master table)
+productsRouter.get('/', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const storeId = req.user!.storeId;
+    const query = ((req.query.q as string) || '').trim().toLowerCase();
+
+    let sql = `
+      SELECT p.*,
+             COALESCE((SELECT SUM(quantity) FROM batches WHERE product_id = p.id AND quantity > 0), 0) as total_stock,
+             (SELECT MIN(expiry_date) FROM batches WHERE product_id = p.id AND quantity > 0) as nearest_expiry
+      FROM products p
+      WHERE p.store_id = $1 AND p.is_active = 1
+    `;
+    const params: unknown[] = [storeId];
+
+    if (query) {
+      sql += ` AND (LOWER(p.brand_name) LIKE $2 OR LOWER(p.generic_name) LIKE $2 OR LOWER(p.manufacturer) LIKE $2)`;
+      params.push(`%${query}%`);
+    }
+
+    sql += ' ORDER BY p.brand_name ASC LIMIT 100';
+    const result = await req.db.query(sql, params);
+
+    const formatted = result.rows.map((p: any) => ({
+      id: p.id,
+      brandName: p.brand_name,
+      genericName: p.generic_name,
+      strength: p.strength,
+      dosageForm: p.dosage_form,
+      manufacturer: p.manufacturer,
+      barcodes: JSON.parse(p.barcodes || '[]'),
+      hsnCode: p.hsn_code,
+      taxCategory: p.tax_category,
+      taxRatePercent: Number(p.tax_rate_percent),
+      unitsPerPack: Number(p.units_per_pack),
+      packUnitLabel: p.pack_unit_label,
+      looseUnitLabel: p.loose_unit_label,
+      rackLocation: p.rack_location,
+      reorderLevel: Number(p.reorder_level),
+      totalStock: Number(p.total_stock),
+      nearestExpiry: p.nearest_expiry,
+      isActive: Boolean(p.is_active),
+    }));
+
+    res.json({ products: formatted });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PUT /products/:id (Update product details - Owner only, MED-004)
+productsRouter.put('/:id', authenticateToken, requireOwner, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const productId = Array.isArray(req.params.id) ? req.params.id[0]! : req.params.id!;
+    const storeId = req.user!.storeId;
+    const body = ProductSchema.partial().parse(req.body);
+    const nowIso = new Date().toISOString();
+
+    const existing = await req.db.queryOne<{ id: string }>('SELECT id FROM products WHERE id = $1 AND store_id = $2', [
+      productId,
+      storeId,
+    ]);
+    if (!existing) throw new AppError(404, 'NOT_FOUND', 'Product Not Found', 'Product does not exist.');
+
+    await req.db.execute(
+      `UPDATE products SET
+         brand_name = COALESCE($1, brand_name),
+         generic_name = COALESCE($2, generic_name),
+         strength = COALESCE($3, strength),
+         dosage_form = COALESCE($4, dosage_form),
+         manufacturer = COALESCE($5, manufacturer),
+         hsn_code = COALESCE($6, hsn_code),
+         tax_rate_percent = COALESCE($7, tax_rate_percent),
+         units_per_pack = COALESCE($8, units_per_pack),
+         rack_location = COALESCE($9, rack_location),
+         reorder_level = COALESCE($10, reorder_level),
+         updated_at = $11
+       WHERE id = $12 AND store_id = $13`,
+      [
+        body.brandName ?? null,
+        body.genericName ?? null,
+        body.strength ?? null,
+        body.dosageForm ?? null,
+        body.manufacturer ?? null,
+        body.hsnCode ?? null,
+        body.taxRatePercent ?? null,
+        body.unitsPerPack ?? null,
+        body.rackLocation ?? null,
+        body.reorderLevel ?? null,
+        nowIso,
+        productId,
+        storeId,
+      ]
+    );
+
+    res.json({ success: true, message: 'Product updated successfully.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /products/:id (Deactivate product - Owner only, MED-001)
+productsRouter.delete('/:id', authenticateToken, requireOwner, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const productId = Array.isArray(req.params.id) ? req.params.id[0]! : req.params.id!;
+    const storeId = req.user!.storeId;
+    const nowIso = new Date().toISOString();
+
+    await req.db.execute(
+      'UPDATE products SET is_active = 0, updated_at = $1 WHERE id = $2 AND store_id = $3',
+      [nowIso, productId, storeId]
+    );
+
+    res.json({ success: true, message: 'Product deactivated successfully.' });
+  } catch (err) {
+    next(err);
+  }
+});

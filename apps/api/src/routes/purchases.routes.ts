@@ -10,11 +10,20 @@ import { generateUUIDv7 } from '@algions/domain';
 export const purchasesRouter = Router();
 
 // GET /suppliers
-purchasesRouter.get('/suppliers', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
+purchasesRouter.get(['/suppliers', '/'], authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const storeId = req.user!.storeId;
     const suppliers = await req.db.query(
-      'SELECT id, name, gstin, phone, address, credit_period_days as "creditPeriodDays", is_active as "isActive" FROM suppliers WHERE store_id = $1 AND is_active = 1 ORDER BY name ASC',
+      `SELECT s.id, s.name, s.gstin, s.phone, s.address, s.credit_period_days as "creditPeriodDays",
+              s.is_active as "isActive",
+              COALESCE((
+                SELECT SUM(p.total_amount_paise) FROM purchase_invoices p WHERE p.supplier_id = s.id AND p.store_id = $1
+              ), 0) - COALESCE((
+                SELECT SUM(l.debit_paise) FROM ledger_entries l WHERE l.account_code = '2000' AND l.narration LIKE '%' || s.name || '%' AND l.store_id = $1
+              ), 0) as "outstandingPayablePaise"
+       FROM suppliers s
+       WHERE s.store_id = $1 AND s.is_active = 1
+       ORDER BY s.name ASC`,
       [storeId]
     );
     res.json({ suppliers: suppliers.rows });
@@ -24,7 +33,7 @@ purchasesRouter.get('/suppliers', authenticateToken, async (req: Request, res: R
 });
 
 // POST /suppliers (Owner only)
-purchasesRouter.post('/suppliers', authenticateToken, requireOwner, async (req: Request, res: Response, next: NextFunction) => {
+purchasesRouter.post(['/suppliers', '/'], authenticateToken, requireOwner, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const body = SupplierSchema.parse(req.body);
     const storeId = req.user!.storeId;
@@ -48,6 +57,83 @@ purchasesRouter.post('/suppliers', authenticateToken, requireOwner, async (req: 
     );
 
     res.status(201).json({ id: newId, ...body });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /suppliers/:id/payments (Record supplier payment - PUR-008, ACC-003)
+purchasesRouter.post(['/suppliers/:id/payments', '/:id/payments'], authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const supplierId = Array.isArray(req.params.id) ? req.params.id[0]! : req.params.id!;
+    const { amountPaise, mode, notes } = req.body;
+    if (!amountPaise || amountPaise <= 0) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'Invalid Amount', 'Payment amount must be greater than zero.');
+    }
+    const storeId = req.user!.storeId;
+    const nowIso = new Date().toISOString();
+    const paymentId = generateUUIDv7();
+
+    const supplier = await req.db.queryOne<{ id: string; name: string }>(
+      'SELECT id, name FROM suppliers WHERE id = $1 AND store_id = $2',
+      [supplierId, storeId]
+    );
+    if (!supplier) throw new AppError(404, 'NOT_FOUND', 'Supplier Not Found', 'Supplier not found.');
+
+    await req.db.transaction(async (tx) => {
+      const accountCode = mode === 'BANK' || mode === 'UPI' ? '1010' : '1000';
+      const accountName = mode === 'BANK' || mode === 'UPI' ? 'Bank Account' : 'Cash in Hand';
+
+      // Debit Liability (Accounts Payable - 2000)
+      await tx.execute(
+        `INSERT INTO ledger_entries (
+          id, store_id, transaction_id, entry_date, account_code, account_name,
+          category, debit_paise, credit_paise, narration, reference_document_type,
+          reference_document_id, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+        [
+          generateUUIDv7(),
+          storeId,
+          paymentId,
+          nowIso.slice(0, 10),
+          '2000',
+          'Accounts Payable (Suppliers)',
+          'LIABILITY',
+          amountPaise,
+          0,
+          `Payment to Supplier ${supplier.name}: ${notes || 'Invoice settlement'}`,
+          'SUPPLIER_PAYMENT',
+          paymentId,
+          nowIso,
+        ]
+      );
+
+      // Credit Asset (Cash/Bank)
+      await tx.execute(
+        `INSERT INTO ledger_entries (
+          id, store_id, transaction_id, entry_date, account_code, account_name,
+          category, debit_paise, credit_paise, narration, reference_document_type,
+          reference_document_id, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+        [
+          generateUUIDv7(),
+          storeId,
+          paymentId,
+          nowIso.slice(0, 10),
+          accountCode,
+          accountName,
+          'ASSET',
+          0,
+          amountPaise,
+          `Payment to Supplier ${supplier.name}: ${notes || 'Invoice settlement'}`,
+          'SUPPLIER_PAYMENT',
+          paymentId,
+          nowIso,
+        ]
+      );
+    });
+
+    res.json({ success: true, message: 'Supplier payment recorded and ledger posted.' });
   } catch (err) {
     next(err);
   }

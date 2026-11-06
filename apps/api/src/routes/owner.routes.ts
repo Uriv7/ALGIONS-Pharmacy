@@ -272,3 +272,106 @@ ownerRouter.get('/audit/logs', authenticateToken, requireOwner, async (req: Requ
     next(err);
   }
 });
+
+// GET /owner/reports/sales (RPT-002: Comprehensive Sales Report)
+ownerRouter.get('/reports/sales', authenticateToken, requireOwner, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const storeId = req.user!.storeId;
+    const startDate = (req.query.startDate as string) || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const endDate = (req.query.endDate as string) || new Date().toISOString().slice(0, 10);
+
+    // 1. By Item
+    const items = await req.db.query(
+      `SELECT l.product_name as "productName",
+              SUM(l.quantity) as "unitsSold",
+              SUM(l.final_line_total_paise) as "revenuePaise",
+              SUM(l.total_tax_paise) as "taxPaise"
+       FROM sales_lines l
+       JOIN sales_invoices i ON l.sales_invoice_id = i.id
+       WHERE i.store_id = $1 AND i.status = 'POSTED' AND i.created_at >= $2 AND i.created_at <= $3
+       GROUP BY l.product_name
+       ORDER BY SUM(l.final_line_total_paise) DESC LIMIT 50`,
+      [storeId, `${startDate}T00:00:00`, `${endDate}T23:59:59`]
+    );
+
+    // 2. By Cashier
+    const cashiers = await req.db.query(
+      `SELECT u.name as "cashierName",
+              COUNT(i.id) as "billCount",
+              SUM(i.grand_total_paise) as "totalSalesPaise"
+       FROM sales_invoices i
+       JOIN users u ON i.user_id = u.id
+       WHERE i.store_id = $1 AND i.status = 'POSTED' AND i.created_at >= $2 AND i.created_at <= $3
+       GROUP BY u.name
+       ORDER BY SUM(i.grand_total_paise) DESC`,
+      [storeId, `${startDate}T00:00:00`, `${endDate}T23:59:59`]
+    );
+
+    // 3. Overall Aggregates
+    const agg = await req.db.queryOne<{ total_sales: number; bill_count: number; total_tax: number }>(
+      `SELECT SUM(grand_total_paise) as total_sales,
+              COUNT(*) as bill_count,
+              SUM(tax_total_paise) as total_tax
+       FROM sales_invoices
+       WHERE store_id = $1 AND status = 'POSTED' AND created_at >= $2 AND created_at <= $3`,
+      [storeId, `${startDate}T00:00:00`, `${endDate}T23:59:59`]
+    );
+
+    res.json({
+      startDate,
+      endDate,
+      totalSalesPaise: Number(agg?.total_sales || 0),
+      totalBillsCount: Number(agg?.bill_count || 0),
+      totalTaxPaise: Number(agg?.total_tax || 0),
+      itemSales: items.rows,
+      cashierPerformance: cashiers.rows,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /owner/reports/velocity (EXP-006: Fast vs Slow-moving Analysis)
+ownerRouter.get('/reports/velocity', authenticateToken, requireOwner, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const storeId = req.user!.storeId;
+
+    // Fast-moving (dispensed in last 30 days)
+    const fastMoving = await req.db.query(
+      `SELECT p.brand_name as "brandName", p.generic_name as "genericName",
+              SUM(l.quantity) as "unitsSold",
+              COALESCE((SELECT SUM(quantity) FROM batches WHERE product_id = p.id AND quantity > 0), 0) as "currentStock"
+       FROM sales_lines l
+       JOIN products p ON l.product_id = p.id
+       JOIN sales_invoices i ON l.sales_invoice_id = i.id
+       WHERE i.store_id = $1 AND i.status = 'POSTED'
+       GROUP BY p.brand_name, p.generic_name, p.id
+       ORDER BY "unitsSold" DESC LIMIT 15`,
+      [storeId]
+    );
+
+    // Slow-moving (in stock but zero sales in last 30 days)
+    const slowMoving = await req.db.query(
+      `SELECT p.brand_name as "brandName", p.generic_name as "genericName",
+              COALESCE(SUM(b.quantity), 0) as "currentStock",
+              MIN(b.expiry_date) as "nearestExpiry"
+       FROM products p
+       JOIN batches b ON b.product_id = p.id
+       WHERE p.store_id = $1 AND b.quantity > 0 AND p.id NOT IN (
+         SELECT DISTINCT product_id FROM sales_lines l
+         JOIN sales_invoices i ON l.sales_invoice_id = i.id
+         WHERE i.store_id = $1 AND i.status = 'POSTED'
+       )
+       GROUP BY p.brand_name, p.generic_name
+       ORDER BY "currentStock" DESC LIMIT 15`,
+      [storeId]
+    );
+
+    res.json({
+      fastMoving: fastMoving.rows,
+      slowMoving: slowMoving.rows,
+    });
+  } catch (err) {
+    next(err);
+  }
+});

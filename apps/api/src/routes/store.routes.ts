@@ -52,8 +52,8 @@ storeRouter.get('/status', async (req: Request, res: Response, next: NextFunctio
   }
 });
 
-// POST /devices/primary/heartbeat or /store/devices/primary/heartbeat
-storeRouter.post(['/devices/primary/heartbeat', '/primary/heartbeat'], async (req: Request, res: Response, next: NextFunction) => {
+// POST /devices/primary/heartbeat or /primary/heartbeat
+storeRouter.post(['/primary/heartbeat', '/heartbeat', '/devices/primary/heartbeat'], async (req: Request, res: Response, next: NextFunction) => {
   try {
     const body = DeviceHeartbeatSchema.parse(req.body);
     const store = await req.db.queryOne<{ id: string; active_mode: StoreMode; primary_device_id: string }>(

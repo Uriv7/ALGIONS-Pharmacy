@@ -13,6 +13,9 @@ import { CustomerManagementScreen } from './screens/CustomerManagementScreen.js'
 import { ExpiryManagementScreen } from './screens/ExpiryManagementScreen.js';
 import { AccountingGstScreen } from './screens/AccountingGstScreen.js';
 import { StoreControlScreen } from './screens/StoreControlScreen.js';
+import { MedicineMasterScreen } from './screens/MedicineMasterScreen.js';
+import { SupplierManagementScreen } from './screens/SupplierManagementScreen.js';
+import { ReportsScreen } from './screens/ReportsScreen.js';
 import { LockScreen } from './components/LockScreen.js';
 import { ReceiptPrintDialog } from './components/dialogs/ReceiptPrintDialog.js';
 import { FullWidthBanner } from '@algions/ui';
@@ -262,9 +265,13 @@ export const App: React.FC = () => {
 
         {activeScreen === 'STOCK' && <StockCheckScreen />}
 
+        {activeScreen === 'MEDICINES' && <MedicineMasterScreen user={user} />}
+
         {activeScreen === 'PURCHASES' && (
           <PurchaseEntryScreen onSuccess={() => setActiveScreen('STOCK')} />
         )}
+
+        {activeScreen === 'SUPPLIERS' && <SupplierManagementScreen user={user} />}
 
         {activeScreen === 'INVOICES' && (
           <InvoiceListScreen
@@ -290,6 +297,8 @@ export const App: React.FC = () => {
         )}
 
         {activeScreen === 'DASHBOARD' && <OwnerDashboardScreen />}
+
+        {activeScreen === 'REPORTS' && <ReportsScreen />}
 
         {activeScreen === 'GST' && <AccountingGstScreen />}
 

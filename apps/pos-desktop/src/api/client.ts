@@ -292,6 +292,61 @@ export class ApiClient {
       body: JSON.stringify(payload),
     });
   }
+
+  async getProductsList(query?: string): Promise<{ products: any[] }> {
+    const q = query ? `?q=${encodeURIComponent(query)}` : '';
+    return this.request<{ products: any[] }>(`/products${q}`);
+  }
+
+  async createProduct(product: any): Promise<any> {
+    return this.request<any>('/products', {
+      method: 'POST',
+      body: JSON.stringify(product),
+    });
+  }
+
+  async updateProduct(id: string, product: any): Promise<any> {
+    return this.request<any>(`/products/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(product),
+    });
+  }
+
+  async deactivateProduct(id: string): Promise<any> {
+    return this.request<any>(`/products/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getSuppliersList(): Promise<{ suppliers: any[] }> {
+    return this.request<{ suppliers: any[] }>('/suppliers');
+  }
+
+  async createSupplier(supplier: any): Promise<any> {
+    return this.request<any>('/suppliers', {
+      method: 'POST',
+      body: JSON.stringify(supplier),
+    });
+  }
+
+  async recordSupplierPayment(supplierId: string, payload: { amountPaise: number; mode: string; notes?: string }): Promise<any> {
+    return this.request<any>(`/suppliers/${supplierId}/payments`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getSalesReport(startDate?: string, endDate?: string): Promise<any> {
+    const params = new URLSearchParams();
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return this.request<any>(`/owner/reports/sales${qs}`);
+  }
+
+  async getVelocityReport(): Promise<any> {
+    return this.request<any>('/owner/reports/velocity');
+  }
 }
 
 export const api = new ApiClient();

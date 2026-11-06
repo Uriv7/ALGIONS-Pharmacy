@@ -13,6 +13,9 @@ import {
   Calculator,
   Server,
   UserCheck,
+  Pill,
+  Truck,
+  BarChart3,
 } from 'lucide-react';
 import { AccountType } from '@algions/contracts';
 
@@ -20,12 +23,15 @@ export type ActiveScreen =
   | 'POS'
   | 'SEARCH'
   | 'STOCK'
+  | 'MEDICINES'
   | 'PURCHASES'
+  | 'SUPPLIERS'
   | 'INVOICES'
   | 'CUSTOMERS'
   | 'EXPIRY'
   | 'HELD'
   | 'DASHBOARD'
+  | 'REPORTS'
   | 'GST'
   | 'EXCEPTIONS'
   | 'STAFF'
@@ -93,6 +99,20 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
           <span>Stock</span>
         </button>
 
+        {/* Medicines Catalog / Formulations (MED-001) */}
+        <button
+          onClick={() => onSelectScreen('MEDICINES')}
+          className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition text-[9px] font-medium w-full ${
+            activeScreen === 'MEDICINES'
+              ? 'bg-teal-600 text-white shadow'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800'
+          }`}
+          title="Medicine Catalog & Formulations (MED-001)"
+        >
+          <Pill className="w-4 h-4 mb-0.5" />
+          <span>Catalog</span>
+        </button>
+
         {/* Purchase Entry (U1) */}
         <button
           onClick={() => onSelectScreen('PURCHASES')}
@@ -105,6 +125,20 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
         >
           <Package className="w-4 h-4 mb-0.5" />
           <span>Purchase</span>
+        </button>
+
+        {/* Supplier Directory & Payables (PUR-002) */}
+        <button
+          onClick={() => onSelectScreen('SUPPLIERS')}
+          className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition text-[9px] font-medium w-full ${
+            activeScreen === 'SUPPLIERS'
+              ? 'bg-teal-600 text-white shadow'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800'
+          }`}
+          title="Suppliers & Payables Ledger (PUR-002)"
+        >
+          <Truck className="w-4 h-4 mb-0.5" />
+          <span>Suppliers</span>
         </button>
 
         {/* Invoices List & Returns (P3 / RET-001) */}
@@ -185,6 +219,20 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
             >
               <LayoutDashboard className="w-4 h-4 mb-0.5" />
               <span>Metrics</span>
+            </button>
+
+            {/* MIS & Sales Velocity Reports (RPT-002) */}
+            <button
+              onClick={() => onSelectScreen('REPORTS')}
+              className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition text-[9px] font-medium w-full ${
+                activeScreen === 'REPORTS'
+                  ? 'bg-teal-600 text-white shadow'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+              title="MIS Reports & Sales Velocity (RPT-002)"
+            >
+              <BarChart3 className="w-4 h-4 mb-0.5" />
+              <span>Reports</span>
             </button>
 
             {/* GST & Double-Entry Accounting (GST-004 / ACC-005) */}
