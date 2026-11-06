@@ -148,7 +148,7 @@ accountingRouter.get('/gst-summary', authenticateToken, requireOwner, async (req
 });
 
 // GET /customers
-accountingRouter.get('/customers', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
+accountingRouter.get(['/customers', '/'], authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const storeId = req.user!.storeId;
     const query = ((req.query.q as string) || '').trim().toLowerCase();
@@ -170,7 +170,7 @@ accountingRouter.get('/customers', authenticateToken, async (req: Request, res: 
 });
 
 // POST /customers
-accountingRouter.post('/customers', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
+accountingRouter.post(['/customers', '/'], authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const body = CustomerSchema.parse(req.body);
     const storeId = req.user!.storeId;
@@ -200,10 +200,8 @@ accountingRouter.post('/customers', authenticateToken, async (req: Request, res:
   }
 });
 
-
-
 // GET /doctors
-accountingRouter.get('/doctors', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
+accountingRouter.get(['/doctors', '/'], authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const storeId = req.user!.storeId;
     const result = await req.db.query('SELECT * FROM doctors WHERE store_id = $1 AND is_active = 1 ORDER BY name ASC', [
@@ -216,7 +214,7 @@ accountingRouter.get('/doctors', authenticateToken, async (req: Request, res: Re
 });
 
 // POST /doctors
-accountingRouter.post('/doctors', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
+accountingRouter.post(['/doctors', '/'], authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const body = DoctorSchema.parse(req.body);
     const storeId = req.user!.storeId;
@@ -246,7 +244,7 @@ accountingRouter.post('/doctors', authenticateToken, async (req: Request, res: R
 });
 
 // POST /customers/:id/payments (Customer credit receipt settlement - ACC-003, CUS-003)
-accountingRouter.post('/customers/:id/payments', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
+accountingRouter.post(['/customers/:id/payments', '/:id/payments'], authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const customerId = Array.isArray(req.params.id) ? req.params.id[0]! : req.params.id!;
     const { amountPaise, mode, notes } = req.body;
