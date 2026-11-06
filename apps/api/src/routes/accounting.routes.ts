@@ -3,7 +3,7 @@ import {
   authenticateToken,
   requireOwner,
 } from '../middleware/auth.js';
-import { CustomerSchema, DoctorSchema } from '@algions/contracts';
+import { CustomerSchema, DoctorSchema, CreateExpenseSchema } from '@algions/contracts';
 import { generateUUIDv7 } from '@algions/domain';
 import { AppError } from '../middleware/error.js';
 
@@ -322,6 +322,159 @@ accountingRouter.post(['/customers/:id/payments', '/:id/payments'], authenticate
     });
 
     res.json({ success: true, message: 'Customer payment recorded and ledger posted.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /accounting/expenses (Record Operating Expenses - Owner only, ACC-004)
+accountingRouter.post('/expenses', authenticateToken, requireOwner, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const body = CreateExpenseSchema.parse(req.body);
+    const storeId = req.user!.storeId;
+    const expenseId = generateUUIDv7();
+    const nowIso = new Date().toISOString();
+
+    const categoryMap: Record<string, { code: string; name: string }> = {
+      RENT: { code: '5001', name: 'Shop Rent Expense' },
+      ELECTRICITY: { code: '5002', name: 'Electricity & Utilities Expense' },
+      PACKAGING: { code: '5003', name: 'Packaging & Materials Expense' },
+      SALARY_ADVANCE: { code: '5004', name: 'Salary & Staff Advance' },
+      TEA_REFRESHMENTS: { code: '5005', name: 'Refreshments & Pantry Expense' },
+      MAINTENANCE: { code: '5006', name: 'Repairs & Store Maintenance' },
+      OTHER: { code: '5000', name: 'General Operating Expenses' },
+    };
+
+    const expAccount = categoryMap[body.category] || categoryMap.OTHER;
+    const paymentAccountCode = body.paymentMode === 'CASH' ? '1000' : '1010';
+    const paymentAccountName = body.paymentMode === 'CASH' ? 'Cash in Hand' : 'Bank Account';
+
+    await req.db.transaction(async (tx) => {
+      // 1. Debit Expense Account (EXPENSE increases with Debit)
+      await tx.execute(
+        `INSERT INTO ledger_entries (
+          id, store_id, transaction_id, entry_date, account_code, account_name,
+          category, debit_paise, credit_paise, narration, reference_document_type,
+          reference_document_id, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+        [
+          generateUUIDv7(),
+          storeId,
+          expenseId,
+          nowIso.slice(0, 10),
+          expAccount.code,
+          expAccount.name,
+          'EXPENSE',
+          body.amountPaise,
+          0,
+          `Paid ${body.payeeName}: ${body.narration || expAccount.name}`,
+          'EXPENSE_VOUCHER',
+          expenseId,
+          nowIso,
+        ]
+      );
+
+      // 2. Credit Cash/Bank (ASSET decreases with Credit)
+      await tx.execute(
+        `INSERT INTO ledger_entries (
+          id, store_id, transaction_id, entry_date, account_code, account_name,
+          category, debit_paise, credit_paise, narration, reference_document_type,
+          reference_document_id, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+        [
+          generateUUIDv7(),
+          storeId,
+          expenseId,
+          nowIso.slice(0, 10),
+          paymentAccountCode,
+          paymentAccountName,
+          'ASSET',
+          0,
+          body.amountPaise,
+          `Paid ${body.payeeName} (${body.paymentMode}): ${body.narration || expAccount.name}`,
+          'EXPENSE_VOUCHER',
+          expenseId,
+          nowIso,
+        ]
+      );
+    });
+
+    res.status(201).json({
+      success: true,
+      expenseId,
+      message: 'Expense voucher posted to double-entry ledger.',
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /accounting/expenses (List Expenses - Owner only)
+accountingRouter.get('/expenses', authenticateToken, requireOwner, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const storeId = req.user!.storeId;
+    const expenses = await req.db.query(
+      `SELECT id, entry_date as "date", account_code as "accountCode",
+              account_name as "accountName", debit_paise as "amountPaise",
+              narration, created_at as "createdAt"
+       FROM ledger_entries
+       WHERE store_id = $1 AND category = 'EXPENSE' AND debit_paise > 0
+       ORDER BY created_at DESC LIMIT 50`,
+      [storeId]
+    );
+
+    res.json({ expenses: expenses.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /accounting/registers/schedule-h1 (Statutory Schedule H1 & Antibiotic Drug Register - CUS-006 / QA-011)
+accountingRouter.get('/registers/schedule-h1', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const storeId = req.user!.storeId;
+    const query = `
+      SELECT i.full_invoice_number as "invoiceNumber",
+             i.created_at as "date",
+             COALESCE(i.customer_name, c.name, 'Walk-in Patient') as "patientName",
+             COALESCE(i.customer_phone, c.phone, '-') as "patientPhone",
+             COALESCE(c.address, 'Local') as "patientAddress",
+             COALESCE(i.doctor_name, d.name, 'Consulting Physician') as "doctorName",
+             COALESCE(d.reg_number, 'Reg/State/2026') as "doctorRegNumber",
+             COALESCE(d.hospital_clinic, 'Clinic') as "doctorClinic",
+             l.product_name as "drugName",
+             l.generic_name as "genericName",
+             l.batch_number as "batchNumber",
+             l.expiry_date as "expiryDate",
+             l.quantity as "quantityDispensed",
+             u.name as "pharmacistName"
+      FROM sales_lines l
+      JOIN sales_invoices i ON l.sales_invoice_id = i.id
+      JOIN users u ON i.user_id = u.id
+      LEFT JOIN customers c ON i.customer_id = c.id
+      LEFT JOIN doctors d ON i.doctor_id = d.id
+      WHERE i.store_id = $1 AND i.status = 'POSTED'
+        AND (
+          LOWER(l.generic_name) LIKE '%amoxicillin%' OR
+          LOWER(l.generic_name) LIKE '%azithromycin%' OR
+          LOWER(l.generic_name) LIKE '%cefixime%' OR
+          LOWER(l.generic_name) LIKE '%moxifloxacin%' OR
+          LOWER(l.generic_name) LIKE '%levofloxacin%' OR
+          LOWER(l.generic_name) LIKE '%ciprofloxacin%' OR
+          LOWER(l.generic_name) LIKE '%meropenem%' OR
+          LOWER(l.generic_name) LIKE '%ceftriaxone%' OR
+          LOWER(l.generic_name) LIKE '%alprazolam%' OR
+          LOWER(l.generic_name) LIKE '%clonazepam%' OR
+          LOWER(l.generic_name) LIKE '%tramadol%' OR
+          LOWER(l.product_name) LIKE '%augmentin%' OR
+          LOWER(l.product_name) LIKE '%moxikind%' OR
+          LOWER(l.product_name) LIKE '%azee%'
+        )
+      ORDER BY i.created_at DESC LIMIT 100
+    `;
+
+    const register = await req.db.query(query, [storeId]);
+    res.json({ register: register.rows });
   } catch (err) {
     next(err);
   }

@@ -129,8 +129,8 @@ storeRouter.post(
   }
 );
 
-// GET /devices
-storeRouter.get('/devices', authenticateToken, requireOwner, async (req: Request, res: Response, next: NextFunction) => {
+// GET /devices or /store/devices
+storeRouter.get(['/devices', '/'], authenticateToken, requireOwner, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const devices = await req.db.query(
       'SELECT id, store_id, name, is_primary_offline, public_key, app_version, status, last_heartbeat, created_at FROM devices WHERE store_id = $1 ORDER BY created_at ASC',
@@ -142,8 +142,8 @@ storeRouter.get('/devices', authenticateToken, requireOwner, async (req: Request
   }
 });
 
-// POST /devices/register
-storeRouter.post('/devices/register', async (req: Request, res: Response, next: NextFunction) => {
+// POST /devices/register or /register
+storeRouter.post(['/devices/register', '/register'], async (req: Request, res: Response, next: NextFunction) => {
   try {
     const body = RegisterDeviceSchema.parse(req.body);
     const store = await req.db.queryOne<{ id: string }>('SELECT id FROM stores LIMIT 1');
@@ -169,9 +169,9 @@ storeRouter.post('/devices/register', async (req: Request, res: Response, next: 
   }
 });
 
-// POST /devices/:id/revoke
+// POST /devices/:id/revoke or /:id/revoke
 storeRouter.post(
-  '/devices/:id/revoke',
+  ['/devices/:id/revoke', '/:id/revoke'],
   authenticateToken,
   requireOwner,
   requireStepUpAuth,

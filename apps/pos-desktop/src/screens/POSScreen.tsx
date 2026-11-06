@@ -151,6 +151,45 @@ export const POSScreen: React.FC<POSScreenProps> = ({
     });
   };
 
+  // Global Hardware Barcode Scanner Keyboard Wedge Listener (PRN-003)
+  useEffect(() => {
+    let buffer = '';
+    let lastKeyTime = 0;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const now = Date.now();
+      const timeDiff = now - lastKeyTime;
+      lastKeyTime = now;
+
+      const activeTag = document.activeElement?.tagName;
+      const isInput = activeTag === 'INPUT' || activeTag === 'TEXTAREA';
+
+      if (e.key === 'Enter') {
+        if (buffer.length >= 6 && timeDiff < 60) {
+          e.preventDefault();
+          const scannedCode = buffer.trim();
+          buffer = '';
+          handleBarcodeScan(scannedCode);
+        } else {
+          buffer = '';
+        }
+        return;
+      }
+
+      // Scanner sends ASCII chars in rapid succession (< 45ms)
+      if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        if (timeDiff > 55) {
+          buffer = e.key;
+        } else {
+          buffer += e.key;
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [lines]);
+
   const handleRemoveLine = (idx: number) => {
     setLines((prev) => prev.filter((_, i) => i !== idx));
     if (focusedIndex >= idx && focusedIndex > 0) {

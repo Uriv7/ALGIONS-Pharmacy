@@ -347,6 +347,50 @@ export class ApiClient {
   async getVelocityReport(): Promise<any> {
     return this.request<any>('/owner/reports/velocity');
   }
+
+  async createExpense(payload: {
+    category: string;
+    payeeName: string;
+    amountPaise: number;
+    paymentMode: string;
+    narration?: string;
+  }): Promise<any> {
+    return this.request<any>('/accounting/expenses', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getExpenses(): Promise<{ expenses: any[] }> {
+    return this.request<{ expenses: any[] }>('/accounting/expenses');
+  }
+
+  async getScheduleH1Register(): Promise<{ register: any[] }> {
+    return this.request<{ register: any[] }>('/accounting/registers/schedule-h1');
+  }
+
+  async getDevices(): Promise<{ devices: any[] }> {
+    return this.request<{ devices: any[] }>('/devices');
+  }
+
+  async revokeDevice(deviceId: string, stepUpPinOrPassword?: string): Promise<any> {
+    return this.request<any>(`/devices/${deviceId}/revoke`, {
+      method: 'POST',
+      body: JSON.stringify({ password: stepUpPinOrPassword || 'Owner@Algions2026!' }),
+    });
+  }
+
+  async registerDevice(payload: {
+    deviceName: string;
+    enrolmentCode: string;
+    publicKey: string;
+    appVersion?: string;
+  }): Promise<any> {
+    return this.request<any>('/devices/register', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
 }
 
 export const api = new ApiClient();

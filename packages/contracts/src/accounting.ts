@@ -71,6 +71,25 @@ export const DoctorSchema = z.object({
 });
 export type DoctorDTO = z.infer<typeof DoctorSchema>;
 
+export const ExpenseCategoryEnum = z.enum([
+  'RENT',
+  'ELECTRICITY',
+  'PACKAGING',
+  'SALARY_ADVANCE',
+  'TEA_REFRESHMENTS',
+  'MAINTENANCE',
+  'OTHER',
+]);
+
+export const CreateExpenseSchema = z.object({
+  category: ExpenseCategoryEnum,
+  payeeName: z.string().min(1),
+  amountPaise: z.number().int().positive(),
+  paymentMode: z.enum(['CASH', 'BANK', 'UPI']),
+  narration: z.string().optional(),
+});
+export type CreateExpenseRequest = z.infer<typeof CreateExpenseSchema>;
+
 export interface DashboardMetricsDTO {
   asOf: string;
   isStale: boolean;
