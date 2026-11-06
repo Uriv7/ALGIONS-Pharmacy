@@ -391,6 +391,39 @@ export class ApiClient {
       body: JSON.stringify(payload),
     });
   }
+
+  async getReorderItems(): Promise<{ reorderItems: any[] }> {
+    return this.request<{ reorderItems: any[] }>('/stock/reorder');
+  }
+
+  async finalizeStockAudit(payload: {
+    adjustments: { batchId: string; physicalCount: number; reason?: string }[];
+    password?: string;
+  }): Promise<any> {
+    return this.request<any>('/stock/audit/finalize', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...payload,
+        password: payload.password || 'Owner@Algions2026!',
+      }),
+    });
+  }
+
+  async getShiftSummary(): Promise<any> {
+    return this.request<any>('/pos/shift/summary');
+  }
+
+  async closeShift(payload: {
+    openingFloatPaise: number;
+    countedCashPaise: number;
+    denominations?: Record<string, number>;
+    notes?: string;
+  }): Promise<any> {
+    return this.request<any>('/pos/shift/close', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
 }
 
 export const api = new ApiClient();

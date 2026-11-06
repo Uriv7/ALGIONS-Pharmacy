@@ -7,6 +7,7 @@ import { CustomerDialog } from '../components/dialogs/CustomerDialog.js';
 import { SubstitutesDialog } from '../components/dialogs/SubstitutesDialog.js';
 import { HeldBillsDialog } from '../components/dialogs/HeldBillsDialog.js';
 import { ReceiptPrintDialog } from '../components/dialogs/ReceiptPrintDialog.js';
+import { ShiftClosingDialog } from '../components/dialogs/ShiftClosingDialog.js';
 import { calculateInvoiceTotals, generateUUIDv7 } from '@algions/domain';
 import { api } from '../api/client.js';
 import { offlineEngine } from '../offline/engine.js';
@@ -43,6 +44,7 @@ export const POSScreen: React.FC<POSScreenProps> = ({
   const [showSubstitutesDialog, setShowSubstitutesDialog] = useState<boolean>(false);
   const [showHeldDialog, setShowHeldDialog] = useState<boolean>(false);
   const [showReceiptDialog, setShowReceiptDialog] = useState<boolean>(false);
+  const [showShiftDialog, setShowShiftDialog] = useState<boolean>(false);
   const [lastSavedInvoice, setLastSavedInvoice] = useState<any | null>(null);
   const [heldBills, setHeldBills] = useState<any[]>([]);
 
@@ -393,6 +395,7 @@ export const POSScreen: React.FC<POSScreenProps> = ({
         onF8PaymentSplit={() => {}}
         onF9Substitutes={() => setShowSubstitutesDialog(true)}
         onF10SavePrint={handleSaveAndPrint}
+        onF11CloseShift={() => setShowShiftDialog(true)}
         onEscClear={() => {
           if (lines.length > 0 && window.confirm('Clear current bill items?')) {
             setLines([]);
@@ -465,6 +468,12 @@ export const POSScreen: React.FC<POSScreenProps> = ({
           invoice={lastSavedInvoice}
           store={storeProfile}
           onClose={() => setShowReceiptDialog(false)}
+        />
+      )}
+
+      {showShiftDialog && (
+        <ShiftClosingDialog
+          onClose={() => setShowShiftDialog(false)}
         />
       )}
     </div>

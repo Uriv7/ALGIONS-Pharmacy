@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { z } from 'zod';
 import {
   CreateSaleRequestSchema,
   SalesReturnRequestSchema,
@@ -727,6 +728,199 @@ posRouter.delete('/holds/:id', authenticateToken, async (req: Request, res: Resp
   try {
     await req.db.execute('DELETE FROM held_bills WHERE id = $1', [req.params.id]);
     res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /pos/shift/summary (Shift / Day-End Drawer Balancing Summary - POS-016)
+posRouter.get('/shift/summary', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const storeId = req.user!.storeId;
+    const userId = req.user!.id;
+    const isOwner = req.user!.accountType === 'OWNER';
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const dayStart = `${todayIso}T00:00:00`;
+
+    // 1. Sales payments by mode today
+    const salesPayments = await req.db.query<{ mode: string; total_paise: number }>(
+      `SELECT p.mode, SUM(p.amount_paise) as total_paise
+       FROM payments p
+       JOIN sales_invoices i ON p.sales_invoice_id = i.id
+       WHERE i.store_id = $1 AND i.status = 'POSTED' AND i.created_at >= $2
+         ${!isOwner ? 'AND i.user_id = $3' : ''}
+       GROUP BY p.mode`,
+      !isOwner ? [storeId, dayStart, userId] : [storeId, dayStart]
+    );
+
+    let cashSalesPaise = 0;
+    let upiSalesPaise = 0;
+    let cardSalesPaise = 0;
+    let creditSalesPaise = 0;
+
+    for (const p of salesPayments.rows) {
+      const amt = Number(p.total_paise || 0);
+      if (p.mode === 'CASH') cashSalesPaise = amt;
+      else if (p.mode === 'UPI') upiSalesPaise = amt;
+      else if (p.mode === 'CARD') cardSalesPaise = amt;
+      else if (p.mode === 'CREDIT') creditSalesPaise = amt;
+    }
+
+    // 2. Customer Khata Cash Receipts today
+    const khataCash = await req.db.queryOne<{ total_paise: number }>(
+      `SELECT SUM(debit_paise) as total_paise
+       FROM ledger_entries
+       WHERE store_id = $1 AND account_code = '1000' AND reference_document_type = 'CUSTOMER_PAYMENT'
+         AND created_at >= $2`,
+      [storeId, dayStart]
+    );
+    const customerKhataCashPaise = Number(khataCash?.total_paise || 0);
+
+    // 3. Cash Expenses Paid from Drawer today
+    const cashExpenses = await req.db.queryOne<{ total_paise: number }>(
+      `SELECT SUM(credit_paise) as total_paise
+       FROM ledger_entries
+       WHERE store_id = $1 AND account_code = '1000' AND reference_document_type = 'EXPENSE_VOUCHER'
+         AND created_at >= $2`,
+      [storeId, dayStart]
+    );
+    const cashExpensesPaise = Number(cashExpenses?.total_paise || 0);
+
+    // 4. Bills count today
+    const bills = await req.db.queryOne<{ count: number }>(
+      `SELECT COUNT(*) as count FROM sales_invoices
+       WHERE store_id = $1 AND status = 'POSTED' AND created_at >= $2
+         ${!isOwner ? 'AND user_id = $3' : ''}`,
+      !isOwner ? [storeId, dayStart, userId] : [storeId, dayStart]
+    );
+
+    const defaultOpeningFloatPaise = 200000; // ₹2,000 float default
+    const expectedCashPaise = defaultOpeningFloatPaise + cashSalesPaise + customerKhataCashPaise - cashExpensesPaise;
+
+    res.json({
+      cashierName: req.user!.name,
+      shiftDate: todayIso,
+      billsCount: Number(bills?.count || 0),
+      openingFloatPaise: defaultOpeningFloatPaise,
+      cashSalesPaise,
+      upiSalesPaise,
+      cardSalesPaise,
+      creditSalesPaise,
+      customerKhataCashPaise,
+      cashExpensesPaise,
+      expectedCashPaise,
+      serverTime: new Date().toISOString(),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /pos/shift/close (Cashier Shift Close with Denominations & Variance - POS-016)
+const CloseShiftSchema = z.object({
+  openingFloatPaise: z.number().int().nonnegative().default(200000),
+  countedCashPaise: z.number().int().nonnegative(),
+  denominations: z.record(z.string(), z.number()).optional(),
+  notes: z.string().optional(),
+});
+
+posRouter.post('/shift/close', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const body = CloseShiftSchema.parse(req.body);
+    const storeId = req.user!.storeId;
+    const userId = req.user!.id;
+    const deviceId = req.user!.deviceId;
+    const nowIso = new Date().toISOString();
+    const todayIso = nowIso.slice(0, 10);
+    const dayStart = `${todayIso}T00:00:00`;
+
+    // Calculate actual cash sales
+    const cashSales = await req.db.queryOne<{ total_paise: number }>(
+      `SELECT SUM(p.amount_paise) as total_paise
+       FROM payments p
+       JOIN sales_invoices i ON p.sales_invoice_id = i.id
+       WHERE i.store_id = $1 AND i.status = 'POSTED' AND p.mode = 'CASH' AND i.created_at >= $2`,
+      [storeId, dayStart]
+    );
+    const cashSalesPaise = Number(cashSales?.total_paise || 0);
+
+    const khataCash = await req.db.queryOne<{ total_paise: number }>(
+      `SELECT SUM(debit_paise) as total_paise
+       FROM ledger_entries
+       WHERE store_id = $1 AND account_code = '1000' AND reference_document_type = 'CUSTOMER_PAYMENT'
+         AND created_at >= $2`,
+      [storeId, dayStart]
+    );
+    const customerKhataCashPaise = Number(khataCash?.total_paise || 0);
+
+    const cashExpenses = await req.db.queryOne<{ total_paise: number }>(
+      `SELECT SUM(credit_paise) as total_paise
+       FROM ledger_entries
+       WHERE store_id = $1 AND account_code = '1000' AND reference_document_type = 'EXPENSE_VOUCHER'
+         AND created_at >= $2`,
+      [storeId, dayStart]
+    );
+    const cashExpensesPaise = Number(cashExpenses?.total_paise || 0);
+
+    const expectedCashPaise = body.openingFloatPaise + cashSalesPaise + customerKhataCashPaise - cashExpensesPaise;
+    const variancePaise = body.countedCashPaise - expectedCashPaise; // >0: Overage, <0: Shortage
+
+    // Post to SHA-256 Audit Log chain
+    const auditId = generateUUIDv7();
+    const prevAudit = await req.db.queryOne<{ current_hash: string }>(
+      'SELECT current_hash FROM audit_logs WHERE store_id = $1 ORDER BY created_at DESC LIMIT 1',
+      [storeId]
+    );
+    const prevHash = prevAudit?.current_hash || '0'.repeat(64);
+    const payloadStr = JSON.stringify({
+      action: 'SHIFT_CLOSED',
+      cashier: req.user!.name,
+      openingFloatPaise: body.openingFloatPaise,
+      countedCashPaise: body.countedCashPaise,
+      expectedCashPaise,
+      variancePaise,
+      denominations: body.denominations,
+      notes: body.notes,
+    });
+    const currentHash = crypto.createHash('sha256').update(prevHash + payloadStr + nowIso).digest('hex');
+
+    await req.db.execute(
+      `INSERT INTO audit_logs (id, store_id, user_id, account_type, device_id, action, entity_type, entity_id, before_state, after_state, reason, ip_address, prev_hash, current_hash, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+      [
+        auditId,
+        storeId,
+        userId,
+        req.user!.accountType,
+        deviceId,
+        'SHIFT_CLOSED',
+        'CASH_DRAWER',
+        auditId,
+        null,
+        payloadStr,
+        body.notes || 'Cashier shift closed',
+        req.ip || '127.0.0.1',
+        prevHash,
+        currentHash,
+        nowIso,
+      ]
+    );
+
+    res.json({
+      success: true,
+      shiftCloseId: auditId,
+      cashierName: req.user!.name,
+      shiftDate: todayIso,
+      openingFloatPaise: body.openingFloatPaise,
+      cashSalesPaise,
+      customerKhataCashPaise,
+      cashExpensesPaise,
+      expectedCashPaise,
+      countedCashPaise: body.countedCashPaise,
+      variancePaise,
+      status: variancePaise === 0 ? 'BALANCED' : variancePaise > 0 ? 'OVERAGE' : 'SHORTAGE',
+      message: `Shift closed. Drawer ${variancePaise === 0 ? 'Balanced' : variancePaise > 0 ? 'Overage' : 'Shortage'}.`,
+    });
   } catch (err) {
     next(err);
   }

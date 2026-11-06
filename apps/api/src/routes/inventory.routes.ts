@@ -214,3 +214,173 @@ inventoryRouter.post(
     }
   }
 );
+
+// GET /stock/reorder (Low-Stock and Reorder Indent Suggestions - INV-011)
+inventoryRouter.get('/reorder', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const storeId = req.user!.storeId;
+    const items = await req.db.query(
+      `SELECT p.id, p.brand_name as "brandName", p.generic_name as "genericName",
+              p.strength, p.dosage_form as "dosageForm", p.manufacturer,
+              p.reorder_level as "reorderLevel", p.rack_location as "rackLocation",
+              p.units_per_pack as "unitsPerPack", p.pack_unit_label as "packUnitLabel",
+              COALESCE(SUM(b.quantity), 0) as "currentStock",
+              (SELECT s.name FROM suppliers s
+               JOIN batches b2 ON b2.supplier_id = s.id
+               WHERE b2.product_id = p.id ORDER BY b2.created_at DESC LIMIT 1) as "preferredSupplier"
+       FROM products p
+       LEFT JOIN batches b ON b.product_id = p.id AND b.quantity > 0
+       WHERE p.store_id = $1 AND p.is_active = 1
+       GROUP BY p.id, p.brand_name, p.generic_name, p.strength, p.dosage_form,
+                p.manufacturer, p.reorder_level, p.rack_location, p.units_per_pack, p.pack_unit_label
+       HAVING COALESCE(SUM(b.quantity), 0) <= p.reorder_level
+       ORDER BY (p.reorder_level - COALESCE(SUM(b.quantity), 0)) DESC LIMIT 50`,
+      [storeId]
+    );
+
+    const formatted = items.rows.map((row: any) => {
+      const current = Number(row.currentStock);
+      const reorder = Number(row.reorderLevel);
+      const shortage = Math.max(0, reorder - current);
+      // Suggest order quantity to bring stock to 2x reorder level
+      const suggestedOrderUnits = Math.max(shortage + reorder, 20);
+
+      return {
+        ...row,
+        currentStock: current,
+        reorderLevel: reorder,
+        shortageUnits: shortage,
+        suggestedOrderUnits,
+        suggestedPacks: Math.ceil(suggestedOrderUnits / (Number(row.unitsPerPack) || 10)),
+      };
+    });
+
+    res.json({ reorderItems: formatted });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /stock/audit/finalize (Physical Stock Count & Bulk Variance Posting - INV-010)
+const StockAuditSchema = z.object({
+  adjustments: z.array(
+    z.object({
+      batchId: z.string().uuid(),
+      physicalCount: z.number().int().nonnegative(),
+      reason: z.string().default('PHYSICAL_COUNT_AUDIT'),
+    })
+  ).min(1, 'At least one count entry required'),
+});
+
+inventoryRouter.post(
+  '/audit/finalize',
+  authenticateToken,
+  requireOwner,
+  requireStepUpAuth,
+  checkStoreWriteGuard,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const body = StockAuditSchema.parse(req.body);
+      const storeId = req.user!.storeId;
+      const userId = req.user!.id;
+      const deviceId = req.user!.deviceId;
+      const nowIso = new Date().toISOString();
+      const auditVoucherId = generateUUIDv7();
+
+      let adjustedCount = 0;
+      let totalShortageUnits = 0;
+      let totalExcessUnits = 0;
+
+      await req.db.transaction(async (tx) => {
+        for (const item of body.adjustments) {
+          const batch = await tx.queryOne<{ id: string; quantity: number; batch_number: string; purchase_rate_paise: number }>(
+            'SELECT id, quantity, batch_number, purchase_rate_paise FROM batches WHERE id = $1 AND store_id = $2',
+            [item.batchId, storeId]
+          );
+
+          if (!batch) continue;
+
+          const delta = item.physicalCount - batch.quantity;
+          if (delta === 0) continue; // No discrepancy
+
+          adjustedCount++;
+          if (delta < 0) totalShortageUnits += Math.abs(delta);
+          else totalExcessUnits += delta;
+
+          const movementId = generateUUIDv7();
+          const movementType = delta > 0 ? 'ADJUSTMENT_CORRECTION' : 'ADJUSTMENT_WRITE_OFF';
+
+          // 1. Stock Movement
+          await tx.execute(
+            `INSERT INTO stock_movements (
+              id, store_id, batch_id, movement_type, signed_quantity,
+              source_document_type, source_document_id, user_id, device_id, notes, created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+            [
+              movementId,
+              storeId,
+              item.batchId,
+              movementType,
+              delta,
+              'PHYSICAL_STOCK_AUDIT',
+              auditVoucherId,
+              userId,
+              deviceId,
+              `${item.reason} (Counted: ${item.physicalCount}, Was: ${batch.quantity})`,
+              nowIso,
+            ]
+          );
+
+          // 2. Update Batch Cached Balance
+          await tx.execute('UPDATE batches SET quantity = $1, updated_at = $2 WHERE id = $3', [
+            item.physicalCount,
+            nowIso,
+            item.batchId,
+          ]);
+
+          // 3. Post to General Ledger for Inventory Variance
+          const variancePaise = Math.abs(delta) * Number(batch.purchase_rate_paise || 0);
+          if (variancePaise > 0) {
+            const isShrinkage = delta < 0;
+            const accountCode = isShrinkage ? '5007' : '4005';
+            const accountName = isShrinkage ? 'Inventory Shrinkage & Audit Loss' : 'Inventory Audit Gain';
+
+            await tx.execute(
+              `INSERT INTO ledger_entries (
+                id, store_id, transaction_id, entry_date, account_code, account_name,
+                category, debit_paise, credit_paise, narration, reference_document_type,
+                reference_document_id, created_at
+              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+              [
+                generateUUIDv7(),
+                storeId,
+                auditVoucherId,
+                nowIso.slice(0, 10),
+                accountCode,
+                accountName,
+                isShrinkage ? 'EXPENSE' : 'INCOME',
+                isShrinkage ? variancePaise : 0,
+                isShrinkage ? 0 : variancePaise,
+                `Stock Audit Discrepancy: Batch ${batch.batch_number} (Delta: ${delta})`,
+                'STOCK_AUDIT',
+                auditVoucherId,
+                nowIso,
+              ]
+            );
+          }
+        }
+      });
+
+      res.json({
+        success: true,
+        auditVoucherId,
+        adjustedBatches: adjustedCount,
+        totalShortageUnits,
+        totalExcessUnits,
+        message: `Stock audit finalized. ${adjustedCount} batches updated.`,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);

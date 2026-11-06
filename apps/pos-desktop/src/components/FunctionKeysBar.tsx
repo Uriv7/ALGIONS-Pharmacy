@@ -11,6 +11,7 @@ interface FunctionKeysBarProps {
   onF8PaymentSplit: () => void;
   onF9Substitutes: () => void;
   onF10SavePrint: () => void;
+  onF11CloseShift?: () => void;
   onEscClear: () => void;
   isSaving?: boolean;
 }
@@ -25,6 +26,7 @@ export const FunctionKeysBar: React.FC<FunctionKeysBarProps> = ({
   onF8PaymentSplit,
   onF9Substitutes,
   onF10SavePrint,
+  onF11CloseShift,
   onEscClear,
   isSaving = false,
 }) => {
@@ -95,6 +97,17 @@ export const FunctionKeysBar: React.FC<FunctionKeysBarProps> = ({
           <kbd className="px-1.5 py-0.5 text-[10px] font-bold bg-slate-900 rounded text-teal-400">F9</kbd>
           <span>Substitutes</span>
         </button>
+
+        {onF11CloseShift && (
+          <button
+            onClick={onF11CloseShift}
+            className="flex items-center gap-1 px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 active:bg-slate-500 transition text-amber-300"
+            title="Shift & Drawer Balancing"
+          >
+            <kbd className="px-1.5 py-0.5 text-[10px] font-bold bg-slate-900 rounded text-amber-400">F11</kbd>
+            <span>Close Shift</span>
+          </button>
+        )}
 
         <button
           onClick={onEscClear}
