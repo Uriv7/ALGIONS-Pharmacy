@@ -1,19 +1,31 @@
 import React, { useState } from 'react';
-import { RotateCcw, AlertTriangle, Check, X, ShieldAlert } from 'lucide-react';
+import { RotateCcw, AlertTriangle, Check, X, ShieldAlert, KeyRound, User } from 'lucide-react';
 import { formatPaiseToINR } from '@algions/domain';
 import { api } from '../../api/client.js';
+import { AuthSessionUser } from '@algions/contracts';
+
+const STANDARD_RETURN_REASONS = [
+  'Customer Return - Unused intact strip',
+  'Prescription Modified by Physician',
+  'Incorrect Medicine Dispensed',
+  'Damaged Packaging / Broken Foil',
+  'Near Expiry Returned by Customer',
+];
 
 interface SalesReturnDialogProps {
   invoice: any;
+  user?: AuthSessionUser;
   onClose: () => void;
   onSuccess: () => void;
 }
 
 export const SalesReturnDialog: React.FC<SalesReturnDialogProps> = ({
   invoice,
+  user,
   onClose,
   onSuccess,
 }) => {
+  const isOwner = user?.accountType === 'OWNER';
   const [returnItems, setReturnItems] = useState<
     {
       lineId: string;
@@ -36,12 +48,14 @@ export const SalesReturnDialog: React.FC<SalesReturnDialogProps> = ({
       returnQty: 0,
       unitPricePaise: line.saleRatePaise || line.sale_rate_paise || line.mrpPaise || line.mrp_paise,
       isSellable: true,
-      returnReason: 'Customer Return',
+      returnReason: STANDARD_RETURN_REASONS[0],
     }))
   );
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [supervisorPin, setSupervisorPin] = useState('');
+  const [pinAuthorized, setPinAuthorized] = useState(false);
 
   const handleQtyChange = (idx: number, qty: number) => {
     setReturnItems((prev) => {
@@ -79,6 +93,11 @@ export const SalesReturnDialog: React.FC<SalesReturnDialogProps> = ({
       return;
     }
 
+    if (!isOwner && totalRefundPaise > 100000 && !pinAuthorized) {
+      setError('Refund exceeds ₹1,000. Owner/Manager PIN authorization is required for staff return.');
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
     try {
@@ -105,10 +124,21 @@ export const SalesReturnDialog: React.FC<SalesReturnDialogProps> = ({
         {/* Modal Header */}
         <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
           <div>
-            <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
-              <RotateCcw className="w-5 h-5 text-teal-600" />
-              <span>Process Sales Return (RET-001)</span>
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                <RotateCcw className="w-5 h-5 text-teal-600" />
+                <span>Process Sales Return (RET-001)</span>
+              </h2>
+              {isOwner ? (
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                  Owner Unrestricted
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                  Staff Restricted
+                </span>
+              )}
+            </div>
             <p className="text-xs text-slate-500 font-mono mt-0.5">
               Original Invoice: {invoice.full_invoice_number || invoice.fullInvoiceNumber}
             </p>
@@ -148,6 +178,19 @@ export const SalesReturnDialog: React.FC<SalesReturnDialogProps> = ({
                     <div className="text-[11px] text-slate-400 font-mono">
                       Batch: {item.batchNumber}
                     </div>
+                    {item.returnQty > 0 && (
+                      <select
+                        value={item.returnReason}
+                        onChange={(e) => handleReasonChange(idx, e.target.value)}
+                        className="mt-1 w-full max-w-[220px] px-1.5 py-0.5 text-[10px] bg-slate-50 border border-slate-200 rounded text-slate-700 font-medium"
+                      >
+                        {STANDARD_RETURN_REASONS.map((r) => (
+                          <option key={r} value={r}>
+                            {r}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </td>
                   <td className="py-2.5 text-center font-semibold text-slate-600">
                     {item.originalQty}
@@ -192,6 +235,48 @@ export const SalesReturnDialog: React.FC<SalesReturnDialogProps> = ({
               {formatPaiseToINR(totalRefundPaise)}
             </div>
           </div>
+
+          {/* Supervisor PIN Step-Up for Staff when refund exceeds ₹1,000 */}
+          {!isOwner && totalRefundPaise > 100000 && (
+            <div className="mt-3 p-3 bg-amber-50 border border-amber-300 rounded-xl text-xs">
+              <div className="flex items-center gap-1.5 font-bold text-amber-900">
+                <KeyRound className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                <span>Manager Authorization Required (Refund &gt; ₹1,000)</span>
+              </div>
+              <p className="text-[11px] text-amber-800 mt-0.5">
+                Counter staff returns above ₹1,000 require manager approval. Enter Owner 4-digit PIN (1234):
+              </p>
+              <div className="flex items-center gap-2 mt-2">
+                <input
+                  type="password"
+                  maxLength={4}
+                  value={supervisorPin}
+                  onChange={(e) => setSupervisorPin(e.target.value)}
+                  placeholder="PIN"
+                  className="w-24 px-2 py-1 bg-white border border-slate-300 rounded text-center font-mono font-bold text-sm tracking-widest focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (supervisorPin === '1234') {
+                      setPinAuthorized(true);
+                      setError(null);
+                    } else {
+                      setError('Invalid Manager PIN. Contact Owner.');
+                    }
+                  }}
+                  className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-bold transition shadow-xs"
+                >
+                  Authorize Return
+                </button>
+                {pinAuthorized && (
+                  <span className="text-emerald-700 text-xs font-bold flex items-center gap-1">
+                    <Check className="w-3.5 h-3.5" /> Authorized by Manager
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer */}

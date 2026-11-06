@@ -48,6 +48,12 @@ export const POSScreen: React.FC<POSScreenProps> = ({
   const [lastSavedInvoice, setLastSavedInvoice] = useState<any | null>(null);
   const [heldBills, setHeldBills] = useState<any[]>([]);
 
+  // Batch & Substitute data
+  const [productBatches, setProductBatches] = useState<any[]>([]);
+  const [productSubstitutes, setProductSubstitutes] = useState<any[]>([]);
+  const [isLoadingBatches, setIsLoadingBatches] = useState<boolean>(false);
+  const [isLoadingSubstitutes, setIsLoadingSubstitutes] = useState<boolean>(false);
+
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -219,6 +225,81 @@ export const POSScreen: React.FC<POSScreenProps> = ({
     });
   };
 
+  // Open Batch Select Dialog (F4)
+  const handleOpenBatchDialog = async () => {
+    if (!focusedLine) {
+      setErrorMessage('Please select an item line first to view or change batches.');
+      return;
+    }
+    setIsLoadingBatches(true);
+    try {
+      const res = await api.getProductBatches(focusedLine.productId);
+      setProductBatches(res.batches || []);
+      setShowBatchDialog(true);
+    } catch {
+      setErrorMessage('Failed to load alternative batches.');
+    } finally {
+      setIsLoadingBatches(false);
+    }
+  };
+
+  // Open Substitutes Dialog (F9)
+  const handleOpenSubstitutesDialog = async () => {
+    if (!focusedLine) {
+      setErrorMessage('Please select an item line first to find generic substitutes.');
+      return;
+    }
+    setIsLoadingSubstitutes(true);
+    try {
+      const res = await api.getProductSubstitutes(focusedLine.productId);
+      setProductSubstitutes(res.substitutes || []);
+      setShowSubstitutesDialog(true);
+    } catch {
+      setErrorMessage('Failed to query salt-matching substitutes.');
+    } finally {
+      setIsLoadingSubstitutes(false);
+    }
+  };
+
+  // Select substitute to replace focused line
+  const handleSelectSubstitute = (sub: any) => {
+    if (!focusedLine) return;
+    const batches = sub.batches || [];
+    if (batches.length === 0) {
+      setErrorMessage(`No stock available for ${sub.brandName}.`);
+      return;
+    }
+    const primaryBatch = batches[0];
+    const updatedLine: BillGridLine = {
+      id: focusedLine.id,
+      productId: sub.id,
+      productName: sub.brandName,
+      genericName: sub.genericName,
+      strength: sub.strength,
+      dosageForm: sub.dosageForm,
+      batchId: primaryBatch.id,
+      batchNumber: primaryBatch.batchNumber,
+      expiryDate: primaryBatch.expiryDate,
+      mrpPaise: primaryBatch.mrpPaise,
+      saleRatePaise: primaryBatch.saleRatePaise,
+      quantity: Math.min(focusedLine.quantity, primaryBatch.quantity),
+      unitsPerPack: sub.unitsPerPack,
+      packUnitLabel: sub.packUnitLabel,
+      looseUnitLabel: sub.looseUnitLabel,
+      discountPercent: 0,
+      taxRatePercent: sub.taxRatePercent,
+      availableStock: primaryBatch.quantity,
+      rackLocation: primaryBatch.rackLocation,
+    };
+
+    setLines((prev) => {
+      const copy = [...prev];
+      copy[focusedIndex] = updatedLine;
+      return copy;
+    });
+    setShowSubstitutesDialog(false);
+  };
+
   // Hold Bill (F5)
   const handleHoldBill = async () => {
     if (lines.length === 0) return;
@@ -386,14 +467,29 @@ export const POSScreen: React.FC<POSScreenProps> = ({
 
       {/* Bottom Bar: Function Keys */}
       <FunctionKeysBar
-        onF2Search={() => {}}
+        onF2Search={() => {
+          const searchEl = document.querySelector('input[placeholder*="Search"]') as HTMLInputElement | null;
+          searchEl?.focus();
+        }}
         onF3Customer={() => setShowCustomerDialog(true)}
-        onF4Batch={() => setShowBatchDialog(true)}
+        onF4Batch={handleOpenBatchDialog}
         onF5Hold={handleHoldBill}
         onF6Resume={() => setShowHeldDialog(true)}
-        onF7Discount={() => {}}
-        onF8PaymentSplit={() => {}}
-        onF9Substitutes={() => setShowSubstitutesDialog(true)}
+        onF7Discount={() => {
+          const disc = window.prompt('Enter Bill Discount Percentage (0-100%):', billDiscountPercent.toString());
+          if (disc !== null) {
+            const parsed = parseFloat(disc);
+            if (!isNaN(parsed)) {
+              setBillDiscountPercent(Math.min(100, Math.max(0, parsed)));
+            }
+          }
+        }}
+        onF8PaymentSplit={() => {
+          const modes: ('CASH' | 'UPI' | 'CARD' | 'BANK' | 'CREDIT')[] = ['CASH', 'UPI', 'CARD', 'BANK', 'CREDIT'];
+          const nextIdx = (modes.indexOf(paymentMode) + 1) % modes.length;
+          setPaymentMode(modes[nextIdx]);
+        }}
+        onF9Substitutes={handleOpenSubstitutesDialog}
         onF10SavePrint={handleSaveAndPrint}
         onF11CloseShift={() => setShowShiftDialog(true)}
         onEscClear={() => {
@@ -409,7 +505,7 @@ export const POSScreen: React.FC<POSScreenProps> = ({
       {showBatchDialog && focusedLine && (
         <BatchSelectDialog
           productName={focusedLine.productName}
-          batches={[]} // will load batches
+          batches={productBatches}
           selectedBatchId={focusedLine.batchId}
           onSelectBatch={(b) => {
             setLines((prev) => {
@@ -445,8 +541,8 @@ export const POSScreen: React.FC<POSScreenProps> = ({
           productName={focusedLine.productName}
           genericName={focusedLine.genericName}
           strength={focusedLine.strength}
-          substitutes={[]}
-          onSelectSubstitute={() => {}}
+          substitutes={productSubstitutes}
+          onSelectSubstitute={handleSelectSubstitute}
           onClose={() => setShowSubstitutesDialog(false)}
         />
       )}

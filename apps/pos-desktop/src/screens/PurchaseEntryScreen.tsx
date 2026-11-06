@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Package, Plus, Trash2, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Package, Plus, Trash2, CheckCircle, AlertTriangle, ShieldCheck, User } from 'lucide-react';
 import { api } from '../api/client.js';
 import { formatPaiseToINR, toPaise } from '@algions/domain';
+import { AuthSessionUser } from '@algions/contracts';
 
 interface PurchaseEntryScreenProps {
+  user?: AuthSessionUser;
   onSuccess: () => void;
 }
 
-export const PurchaseEntryScreen: React.FC<PurchaseEntryScreenProps> = ({ onSuccess }) => {
+export const PurchaseEntryScreen: React.FC<PurchaseEntryScreenProps> = ({ user, onSuccess }) => {
+  const isOwner = user?.accountType === 'OWNER';
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [selectedSupplierId, setSelectedSupplierId] = useState('');
   const [invoiceNumber, setInvoiceNumber] = useState('');
@@ -165,13 +168,25 @@ export const PurchaseEntryScreen: React.FC<PurchaseEntryScreenProps> = ({ onSucc
 
   return (
     <div className="flex-1 flex flex-col p-3 sm:p-6 bg-slate-100 overflow-y-auto select-none">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
         <div>
           <h2 className="text-xl font-bold text-slate-800">Purchase Goods Receipt (U1)</h2>
           <p className="text-xs text-slate-500 mt-0.5">
             Record supplier invoice, generate batches, and post positive stock movements atomically
           </p>
         </div>
+
+        {isOwner ? (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 text-purple-700 border border-purple-200 text-xs font-bold">
+            <ShieldCheck className="w-4 h-4 text-purple-600" />
+            <span>Owner Mode: Direct Approval & AP Posting</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-50 text-teal-700 border border-teal-200 text-xs font-bold">
+            <User className="w-4 h-4 text-teal-600" />
+            <span>Staff Entry: Queued for Owner Review ({user?.username || 'Staff'})</span>
+          </div>
+        )}
       </div>
 
       {successMessage && (
@@ -397,7 +412,13 @@ export const PurchaseEntryScreen: React.FC<PurchaseEntryScreenProps> = ({ onSucc
             className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-sm shadow-md transition disabled:opacity-50"
           >
             <CheckCircle className="w-4 h-4" />
-            <span>{isSubmitting ? 'Posting Goods Receipt...' : 'Post Purchase Invoice & Update Stock'}</span>
+            <span>
+              {isSubmitting
+                ? 'Posting Goods Receipt...'
+                : isOwner
+                ? 'Approve & Post Purchase Invoice (Stock + AP)'
+                : 'Submit Purchase Entry (Staff Queued)'}
+            </span>
           </button>
         </div>
       </form>

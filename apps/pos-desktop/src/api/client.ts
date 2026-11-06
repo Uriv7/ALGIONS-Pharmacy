@@ -119,6 +119,14 @@ export class ApiClient {
     return this.request<{ results: any[] }>(`/products/search?q=${encodeURIComponent(q)}`);
   }
 
+  async getProductBatches(productId: string): Promise<{ batches: any[] }> {
+    return this.request<{ batches: any[] }>(`/products/${productId}/batches`);
+  }
+
+  async getProductSubstitutes(productId: string): Promise<{ substitutes: any[] }> {
+    return this.request<{ substitutes: any[] }>(`/products/${productId}/substitutes`);
+  }
+
   async createSale(payload: any, idempotencyKey: string): Promise<SaleInvoiceDTO> {
     return this.request<SaleInvoiceDTO>('/pos/sales', {
       method: 'POST',

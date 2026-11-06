@@ -168,7 +168,7 @@ export const TotalsAndPaymentPanel: React.FC<TotalsAndPaymentPanelProps> = ({
           </div>
 
           {/* Mode Tabs */}
-          <div className="grid grid-cols-3 gap-1.5 mb-3">
+          <div className="grid grid-cols-4 gap-1.5 mb-3">
             <button
               onClick={() => onPaymentModeChange('CASH')}
               className={`py-2 px-1 rounded-lg text-xs font-bold flex flex-col items-center gap-1 transition border ${
@@ -190,7 +190,7 @@ export const TotalsAndPaymentPanel: React.FC<TotalsAndPaymentPanelProps> = ({
               }`}
             >
               <QrCode className="w-4 h-4" />
-              <span>UPI / QR</span>
+              <span>UPI/QR</span>
             </button>
 
             <button
@@ -204,7 +204,54 @@ export const TotalsAndPaymentPanel: React.FC<TotalsAndPaymentPanelProps> = ({
               <CreditCard className="w-4 h-4" />
               <span>Card</span>
             </button>
+
+            <button
+              onClick={() => {
+                if (!customer) {
+                  onSelectCustomerClick();
+                }
+                onPaymentModeChange('CREDIT');
+              }}
+              className={`py-2 px-1 rounded-lg text-xs font-bold flex flex-col items-center gap-1 transition border ${
+                paymentMode === 'CREDIT'
+                  ? 'bg-amber-600 text-white border-amber-600 shadow'
+                  : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              <Building className="w-4 h-4" />
+              <span>Credit</span>
+            </button>
           </div>
+
+          {/* Credit Mode Customer Check */}
+          {paymentMode === 'CREDIT' && (
+            <div className="p-2.5 bg-amber-50 rounded-lg border border-amber-200 text-xs text-amber-900 mb-2">
+              <div className="font-bold flex items-center justify-between">
+                <span>Credit Sale (Khata/Udhar)</span>
+                {customer ? (
+                  <span className="text-[10px] text-amber-800 bg-amber-200/80 px-1.5 py-0.5 rounded font-mono">
+                    Attached
+                  </span>
+                ) : (
+                  <button
+                    onClick={onSelectCustomerClick}
+                    className="text-[11px] underline text-amber-800 font-bold"
+                  >
+                    Select Customer
+                  </button>
+                )}
+              </div>
+              {customer ? (
+                <div className="mt-1 text-[11px] text-amber-800">
+                  Bill will be added to ledger balance for <span className="font-bold">{customer.name}</span>.
+                </div>
+              ) : (
+                <div className="mt-1 text-[11px] text-red-600 font-semibold">
+                  A customer account must be attached to process credit sales.
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Cash Received & Change Return Calculator */}
           {paymentMode === 'CASH' && (

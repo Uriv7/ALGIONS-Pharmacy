@@ -15,8 +15,14 @@ import {
 } from 'lucide-react';
 import { formatPaiseToINR } from '@algions/domain';
 import { api } from '../api/client.js';
+import { AuthSessionUser } from '@algions/contracts';
 
-export const CustomerManagementScreen: React.FC = () => {
+interface CustomerManagementScreenProps {
+  user?: AuthSessionUser;
+}
+
+export const CustomerManagementScreen: React.FC<CustomerManagementScreenProps> = ({ user }) => {
+  const isOwner = user?.accountType === 'OWNER';
   const [customers, setCustomers] = useState<any[]>([]);
   const [ageingData, setAgeingData] = useState<any | null>(null);
   const [activeTab, setActiveTab] = useState<'DIRECTORY' | 'AGEING'>('DIRECTORY');
@@ -29,7 +35,7 @@ export const CustomerManagementScreen: React.FC = () => {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
-  const [creditLimit, setCreditLimit] = useState('5000');
+  const [creditLimit, setCreditLimit] = useState(isOwner ? '5000' : '2000');
   const [savingCustomer, setSavingCustomer] = useState(false);
 
   // Settle Payment Modal
@@ -181,22 +187,28 @@ export const CustomerManagementScreen: React.FC = () => {
           <span>Customer Directory</span>
         </button>
 
-        <button
-          onClick={() => setActiveTab('AGEING')}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold transition shadow-sm ${
-            activeTab === 'AGEING'
-              ? 'bg-teal-600 text-white'
-              : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
-          }`}
-        >
-          <Clock className="w-3.5 h-3.5" />
-          <span>Receivables Ageing (ACC-006)</span>
-          {ageingData?.rows?.length > 0 && (
-            <span className="ml-1 px-1.5 py-0.2 bg-amber-100 text-amber-800 rounded-full text-[10px]">
-              {ageingData.rows.length}
-            </span>
-          )}
-        </button>
+        {isOwner ? (
+          <button
+            onClick={() => setActiveTab('AGEING')}
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold transition shadow-sm ${
+              activeTab === 'AGEING'
+                ? 'bg-teal-600 text-white'
+                : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+            }`}
+          >
+            <Clock className="w-3.5 h-3.5" />
+            <span>Receivables Ageing (Owner - ACC-006)</span>
+            {ageingData?.rows?.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.2 bg-amber-100 text-amber-800 rounded-full text-[10px]">
+                {ageingData.rows.length}
+              </span>
+            )}
+          </button>
+        ) : (
+          <span className="text-[11px] text-slate-500 font-medium px-2.5 py-1 bg-slate-100 rounded-lg border border-slate-200">
+            👤 Staff Counter Mode: Customer Ledger & Payment Settle
+          </span>
+        )}
       </div>
 
       {activeTab === 'AGEING' ? (
@@ -435,15 +447,33 @@ export const CustomerManagementScreen: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Credit Limit (₹)</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700">Credit Limit (₹)</label>
+                  {!isOwner && (
+                    <span className="text-[10px] text-amber-700 font-semibold">Staff limit: max ₹2,000</span>
+                  )}
+                </div>
                 <input
                   type="number"
                   value={creditLimit}
-                  onChange={(e) => setCreditLimit(e.target.value)}
-                  placeholder="5000"
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value) || 0;
+                    if (!isOwner && val > 2000) {
+                      setCreditLimit('2000');
+                    } else {
+                      setCreditLimit(e.target.value);
+                    }
+                  }}
+                  max={!isOwner ? 2000 : undefined}
+                  placeholder={isOwner ? '5000' : '2000'}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold"
                   required
                 />
+                {!isOwner && (
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    Amounts above ₹2,000 require Owner manager approval.
+                  </p>
+                )}
               </div>
 
               <div>

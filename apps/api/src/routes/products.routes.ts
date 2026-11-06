@@ -135,6 +135,137 @@ productsRouter.get('/search', authenticateToken, async (req: Request, res: Respo
   }
 });
 
+// GET /products/:id/batches (Fetch batches for a specific product - POS-007)
+productsRouter.get('/:id/batches', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const productId = Array.isArray(req.params.id) ? req.params.id[0]! : req.params.id!;
+    const storeId = req.user!.storeId;
+    const isOwner = req.user?.accountType === 'OWNER';
+
+    const batchesResult = await req.db.query<{
+      id: string;
+      batch_number: string;
+      mfg_date: string;
+      expiry_date: string;
+      mrp_paise: number;
+      sale_rate_paise: number;
+      purchase_rate_paise: number;
+      quantity: number;
+      rack_location: string;
+    }>(
+      `SELECT id, batch_number, mfg_date, expiry_date, mrp_paise, sale_rate_paise, purchase_rate_paise, quantity, rack_location
+       FROM batches
+       WHERE product_id = $1 AND store_id = $2
+       ORDER BY expiry_date ASC`,
+      [productId, storeId]
+    );
+
+    const formatted = batchesResult.rows.map((b) => ({
+      id: b.id,
+      productId,
+      batchNumber: b.batch_number,
+      mfgDate: b.mfg_date,
+      expiryDate: b.expiry_date,
+      mrpPaise: Number(b.mrp_paise),
+      saleRatePaise: Number(b.sale_rate_paise),
+      purchaseRatePaise: isOwner ? Number(b.purchase_rate_paise) : undefined,
+      quantity: Number(b.quantity),
+      rackLocation: b.rack_location,
+    }));
+
+    res.json({ batches: formatted });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /products/:id/substitutes (Substitute lookup by salt & strength - MED-007)
+productsRouter.get('/:id/substitutes', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const productId = Array.isArray(req.params.id) ? req.params.id[0]! : req.params.id!;
+    const storeId = req.user!.storeId;
+
+    const currentProd = await req.db.queryOne<{ generic_name: string; strength: string }>(
+      'SELECT generic_name, strength FROM products WHERE id = $1 AND store_id = $2',
+      [productId, storeId]
+    );
+
+    if (!currentProd) {
+      throw new AppError(404, 'NOT_FOUND', 'Product Not Found', 'Target product does not exist.');
+    }
+
+    const substitutesResult = await req.db.query<{
+      id: string;
+      brand_name: string;
+      generic_name: string;
+      strength: string;
+      dosage_form: string;
+      manufacturer: string;
+      tax_rate_percent: number;
+      units_per_pack: number;
+      pack_unit_label: string;
+      loose_unit_label: string;
+      rack_location: string;
+    }>(
+      `SELECT id, brand_name, generic_name, strength, dosage_form, manufacturer,
+              tax_rate_percent, units_per_pack, pack_unit_label, loose_unit_label, rack_location
+       FROM products
+       WHERE store_id = $1 AND generic_name = $2 AND id != $3 AND is_active = 1
+       LIMIT 10`,
+      [storeId, currentProd.generic_name, productId]
+    );
+
+    const formatted = [];
+    for (const p of substitutesResult.rows) {
+      const batchesResult = await req.db.query<{
+        id: string;
+        batch_number: string;
+        expiry_date: string;
+        mrp_paise: number;
+        sale_rate_paise: number;
+        quantity: number;
+        rack_location: string;
+      }>(
+        `SELECT id, batch_number, expiry_date, mrp_paise, sale_rate_paise, quantity, rack_location
+         FROM batches
+         WHERE product_id = $1 AND quantity > 0
+         ORDER BY expiry_date ASC`,
+        [p.id]
+      );
+
+      const totalStock = batchesResult.rows.reduce((sum, b) => sum + Number(b.quantity), 0);
+
+      formatted.push({
+        id: p.id,
+        brandName: p.brand_name,
+        genericName: p.generic_name,
+        strength: p.strength,
+        dosageForm: p.dosage_form,
+        manufacturer: p.manufacturer,
+        taxRatePercent: Number(p.tax_rate_percent),
+        unitsPerPack: Number(p.units_per_pack),
+        packUnitLabel: p.pack_unit_label,
+        looseUnitLabel: p.loose_unit_label,
+        rackLocation: p.rack_location,
+        totalStock,
+        batches: batchesResult.rows.map((b) => ({
+          id: b.id,
+          batchNumber: b.batch_number,
+          expiryDate: b.expiry_date,
+          mrpPaise: Number(b.mrp_paise),
+          saleRatePaise: Number(b.sale_rate_paise),
+          quantity: Number(b.quantity),
+          rackLocation: b.rack_location,
+        })),
+      });
+    }
+
+    res.json({ substitutes: formatted });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /catalog/snapshot (For Primary Offline Workstation initial download)
 productsRouter.get('/catalog/snapshot', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
   try {

@@ -15,8 +15,14 @@ import {
 } from 'lucide-react';
 import { api } from '../api/client.js';
 import { formatPaiseToINR, isBatchNearExpiry, isBatchExpired } from '@algions/domain';
+import { AuthSessionUser } from '@algions/contracts';
 
-export const StockCheckScreen: React.FC = () => {
+interface StockCheckScreenProps {
+  user?: AuthSessionUser;
+}
+
+export const StockCheckScreen: React.FC<StockCheckScreenProps> = ({ user }) => {
+  const isOwner = user?.accountType === 'OWNER';
   const [activeTab, setActiveTab] = useState<'BATCHES' | 'AUDIT' | 'REORDER'>('BATCHES');
   const [batches, setBatches] = useState<any[]>([]);
   const [reorderItems, setReorderItems] = useState<any[]>([]);
@@ -149,17 +155,19 @@ export const StockCheckScreen: React.FC = () => {
               <span>Live Batches ({batches.length})</span>
             </button>
 
-            <button
-              onClick={() => setActiveTab('AUDIT')}
-              className={`px-3 py-1.5 rounded-md text-xs font-bold transition flex items-center gap-1.5 ${
-                activeTab === 'AUDIT'
-                  ? 'bg-teal-600 text-white shadow'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <ClipboardList className="w-3.5 h-3.5" />
-              <span>Physical Audit</span>
-            </button>
+            {isOwner && (
+              <button
+                onClick={() => setActiveTab('AUDIT')}
+                className={`px-3 py-1.5 rounded-md text-xs font-bold transition flex items-center gap-1.5 ${
+                  activeTab === 'AUDIT'
+                    ? 'bg-teal-600 text-white shadow'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <ClipboardList className="w-3.5 h-3.5" />
+                <span>Physical Audit (Owner)</span>
+              </button>
+            )}
 
             <button
               onClick={() => setActiveTab('REORDER')}

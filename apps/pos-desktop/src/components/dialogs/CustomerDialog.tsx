@@ -1,14 +1,49 @@
-import React, { useState } from 'react';
-import { X, UserPlus, Phone, User, Check } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, UserPlus, Phone, User, Check, Search, CreditCard } from 'lucide-react';
+import { api } from '../../api/client.js';
+import { formatPaiseToINR } from '@algions/domain';
 
 interface CustomerDialogProps {
-  onSelectCustomer: (customer: { id?: string; name: string; phone: string; balancePaise: number }) => void;
+  onSelectCustomer: (customer: { id?: string; name: string; phone: string; balancePaise: number; creditLimitPaise?: number }) => void;
   onClose: () => void;
 }
 
 export const CustomerDialog: React.FC<CustomerDialogProps> = ({ onSelectCustomer, onClose }) => {
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  useEffect(() => {
+    const term = phone.trim() || name.trim();
+    if (term.length >= 3) {
+      setIsSearching(true);
+      const timer = setTimeout(async () => {
+        try {
+          const res = await api.getCustomers(term);
+          setSearchResults(res.customers || []);
+        } catch {
+          setSearchResults([]);
+        } finally {
+          setIsSearching(false);
+        }
+      }, 150);
+      return () => clearTimeout(timer);
+    } else {
+      setSearchResults([]);
+    }
+  }, [phone, name]);
+
+  const handleSelectExisting = (c: any) => {
+    onSelectCustomer({
+      id: c.id,
+      name: c.name,
+      phone: c.phone,
+      balancePaise: c.currentBalancePaise || 0,
+      creditLimitPaise: c.creditLimitPaise || 0,
+    });
+    onClose();
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,7 +59,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({ onSelectCustomer
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 select-none">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm border border-slate-200 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md border border-slate-200 overflow-hidden">
         <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <UserPlus className="w-4 h-4 text-teal-600" />
@@ -73,6 +108,35 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({ onSelectCustomer
               />
             </div>
           </div>
+
+          {/* Autocomplete suggestions */}
+          {searchResults.length > 0 && (
+            <div className="border border-slate-200 rounded-lg max-h-36 overflow-y-auto divide-y divide-slate-100 bg-slate-50">
+              <div className="px-3 py-1 text-[10px] uppercase font-bold text-slate-400 bg-slate-100/70">
+                Found Matching Customers ({searchResults.length}):
+              </div>
+              {searchResults.map((c) => (
+                <div
+                  key={c.id}
+                  onClick={() => handleSelectExisting(c)}
+                  className="px-3 py-2 hover:bg-teal-50 cursor-pointer flex items-center justify-between text-xs"
+                >
+                  <div>
+                    <div className="font-bold text-slate-800">{c.name}</div>
+                    <div className="text-[11px] text-slate-500">{c.phone}</div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[11px] font-semibold text-teal-700">Select</span>
+                    {c.currentBalancePaise > 0 && (
+                      <div className="text-[10px] text-red-600 font-bold">
+                        Bal: {formatPaiseToINR(c.currentBalancePaise)}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="pt-2 flex justify-end gap-2">
             <button

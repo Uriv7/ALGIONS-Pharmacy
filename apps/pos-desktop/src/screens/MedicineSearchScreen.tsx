@@ -13,7 +13,28 @@ export const MedicineSearchScreen: React.FC<MedicineSearchScreenProps> = ({
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<any[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
+  const [substitutes, setSubstitutes] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingSubstitutes, setLoadingSubstitutes] = useState(false);
+
+  useEffect(() => {
+    if (!selectedProduct?.product?.id) {
+      setSubstitutes([]);
+      return;
+    }
+    const fetchSubs = async () => {
+      setLoadingSubstitutes(true);
+      try {
+        const res = await api.getProductSubstitutes(selectedProduct.product.id);
+        setSubstitutes(res.substitutes || []);
+      } catch {
+        setSubstitutes([]);
+      } finally {
+        setLoadingSubstitutes(false);
+      }
+    };
+    fetchSubs();
+  }, [selectedProduct?.product?.id]);
 
   useEffect(() => {
     const fetchResults = async () => {
@@ -201,6 +222,70 @@ export const MedicineSearchScreen: React.FC<MedicineSearchScreenProps> = ({
                   )}
                 </tbody>
               </table>
+            </div>
+
+            {/* Generic Substitutes Section (Same Salt & Strength) */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-4 py-3 bg-teal-50/50 border-b border-teal-100 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ArrowRightLeft className="w-4 h-4 text-teal-600" />
+                  <h3 className="font-bold text-slate-800 text-sm">
+                    Generic Substitutes (Same Salt & Strength: {selectedProduct.product.genericName})
+                  </h3>
+                </div>
+                <span className="text-xs font-semibold text-teal-700 bg-teal-100/60 px-2 py-0.5 rounded">
+                  {substitutes.length} Available
+                </span>
+              </div>
+
+              {loadingSubstitutes ? (
+                <div className="p-4 text-center text-xs text-slate-400">Searching substitutes...</div>
+              ) : substitutes.length === 0 ? (
+                <div className="p-4 text-center text-xs text-slate-400">
+                  No other brand alternatives found with identical salt formulation.
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {substitutes.map((sub: any) => (
+                    <div
+                      key={sub.id}
+                      className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50 transition"
+                    >
+                      <div>
+                        <div className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                          <span>{sub.brandName}</span>
+                          <span className="text-xs font-semibold text-slate-500">({sub.manufacturer})</span>
+                        </div>
+                        <div className="text-xs text-slate-500 mt-0.5">
+                          MRP: <span className="font-bold text-slate-800">{formatPaiseToINR(sub.mrpPaise)}</span> •
+                          Pack: {sub.unitsPerPack} {sub.looseUnitLabel}s • Rack: {sub.rackLocation || 'Shelf'}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <span
+                            className={`text-xs font-bold ${
+                              sub.totalStock > 0 ? 'text-emerald-700' : 'text-rose-600'
+                            }`}
+                          >
+                            {sub.totalStock > 0 ? `${sub.totalStock} in stock` : 'Out of Stock'}
+                          </span>
+                        </div>
+
+                        {sub.activeBatches?.length > 0 && (
+                          <button
+                            onClick={() => onSelectItemForBilling(sub, sub.activeBatches[0])}
+                            className="px-3 py-1 bg-teal-600 hover:bg-teal-700 text-white rounded text-xs font-bold shadow transition flex items-center gap-1"
+                          >
+                            <span>Dispense Substitute</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         ) : (

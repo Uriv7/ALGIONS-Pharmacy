@@ -202,6 +202,7 @@ export const InvoiceListScreen: React.FC<InvoiceListScreenProps> = ({ user, onRe
       {activeReturnInvoice && (
         <SalesReturnDialog
           invoice={activeReturnInvoice}
+          user={user}
           onClose={() => setActiveReturnInvoice(null)}
           onSuccess={() => {
             setActiveReturnInvoice(null);

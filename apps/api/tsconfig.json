@@ -3,8 +3,12 @@
   "compilerOptions": {
     "rootDir": "./src",
     "outDir": "./dist",
+    "lib": ["ES2022"],
+    "types": ["node"],
+    "skipLibCheck": true,
     "declaration": false,
     "declarationMap": false
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
+  "exclude": ["src/**/*.test.ts"]
 }

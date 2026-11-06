@@ -87,37 +87,67 @@ export const TopBar: React.FC<TopBarProps> = ({
           <span>{isPrimary ? 'Primary Workstation (Offline-Ready)' : 'Secondary Counter'}</span>
         </div>
 
-        {/* Offline Simulator Switch for Demo / Outage testing */}
-        <button
-          onClick={onToggleOfflineSimulator}
-          className={`hidden md:flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold transition border ${
-            isOffline
-              ? 'bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200'
-              : 'bg-slate-50 text-slate-600 border-slate-300 hover:bg-slate-100'
-          }`}
-          title="Click to simulate network outage / restoration"
-        >
-          {isOffline ? (
-            <>
-              <WifiOff className="w-3.5 h-3.5 text-amber-600" />
-              <span>Simulate Online</span>
-            </>
-          ) : (
-            <>
-              <Wifi className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Simulate Outage</span>
-            </>
-          )}
-        </button>
+        {/* Offline Controls: Owner has full control; Staff has operational view */}
+        {user.accountType === 'OWNER' ? (
+          <button
+            onClick={onToggleOfflineSimulator}
+            className={`hidden md:flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold transition border ${
+              isOffline
+                ? 'bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200'
+                : 'bg-slate-50 text-slate-600 border-slate-300 hover:bg-slate-100'
+            }`}
+            title="Owner Control: Simulate network outage / restoration"
+          >
+            {isOffline ? (
+              <>
+                <WifiOff className="w-3.5 h-3.5 text-amber-600" />
+                <span>Simulate Online</span>
+              </>
+            ) : (
+              <>
+                <Wifi className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Simulate Outage</span>
+              </>
+            )}
+          </button>
+        ) : (
+          <div
+            className="hidden md:flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold bg-slate-50 text-slate-500 border border-slate-200"
+            title="Operational Status: Automatic background synchronization active"
+          >
+            {isOffline ? (
+              <>
+                <WifiOff className="w-3.5 h-3.5 text-amber-600" />
+                <span>Offline Queue Active</span>
+              </>
+            ) : (
+              <>
+                <Wifi className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Cloud Synced</span>
+              </>
+            )}
+          </div>
+        )}
 
         {pendingSyncCount > 0 && !isOffline && (
-          <button
-            onClick={onTriggerSync}
-            className="flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition animate-pulse"
-          >
-            <RefreshCw className="w-3 h-3 text-blue-600 animate-spin" />
-            <span className="hidden sm:inline">Sync ({pendingSyncCount})</span>
-          </button>
+          user.accountType === 'OWNER' ? (
+            <button
+              onClick={onTriggerSync}
+              className="flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition animate-pulse"
+              title="Owner Control: Force sync outbox transactions"
+            >
+              <RefreshCw className="w-3 h-3 text-blue-600 animate-spin" />
+              <span className="hidden sm:inline">Sync ({pendingSyncCount})</span>
+            </button>
+          ) : (
+            <div
+              className="flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200"
+              title="Outbox transactions queued for automatic sync"
+            >
+              <RefreshCw className="w-3 h-3 text-blue-600 animate-spin" />
+              <span className="hidden sm:inline">Syncing ({pendingSyncCount})</span>
+            </div>
+          )
         )}
       </div>
 
