@@ -1,0 +1,19 @@
+{
+  "name": "@algions/contracts",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "ALGIONS Pharmacy Shared Contracts, DTOs and Schemas",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test dist/**/*.test.js 2>/dev/null || tsc && node --test dist/**/*.test.js"
+  },
+  "dependencies": {
+    "@algions/domain": "workspace:*",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.2"
+  }
+}
