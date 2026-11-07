@@ -8,6 +8,7 @@ import { SubstitutesDialog } from '../components/dialogs/SubstitutesDialog.js';
 import { HeldBillsDialog } from '../components/dialogs/HeldBillsDialog.js';
 import { ReceiptPrintDialog } from '../components/dialogs/ReceiptPrintDialog.js';
 import { ShiftClosingDialog } from '../components/dialogs/ShiftClosingDialog.js';
+import { DoctorDialog, DoctorInfo } from '../components/dialogs/DoctorDialog.js';
 import { calculateInvoiceTotals, generateUUIDv7 } from '@algions/domain';
 import { api } from '../api/client.js';
 import { offlineEngine } from '../offline/engine.js';
@@ -29,6 +30,7 @@ export const POSScreen: React.FC<POSScreenProps> = ({
   const [lines, setLines] = useState<BillGridLine[]>([]);
   const [focusedIndex, setFocusedIndex] = useState<number>(0);
   const [customer, setCustomer] = useState<{ id?: string; name: string; phone: string; balancePaise: number } | null>(null);
+  const [doctor, setDoctor] = useState<DoctorInfo | null>(null);
   const [billDiscountPercent, setBillDiscountPercent] = useState<number>(0);
   const [paymentMode, setPaymentMode] = useState<'CASH' | 'UPI' | 'CARD' | 'BANK' | 'CREDIT'>('CASH');
   const [cashReceivedInput, setCashReceivedInput] = useState<string>('');
@@ -41,6 +43,7 @@ export const POSScreen: React.FC<POSScreenProps> = ({
   // Dialogs
   const [showBatchDialog, setShowBatchDialog] = useState<boolean>(false);
   const [showCustomerDialog, setShowCustomerDialog] = useState<boolean>(false);
+  const [showDoctorDialog, setShowDoctorDialog] = useState<boolean>(false);
   const [showSubstitutesDialog, setShowSubstitutesDialog] = useState<boolean>(false);
   const [showHeldDialog, setShowHeldDialog] = useState<boolean>(false);
   const [showReceiptDialog, setShowReceiptDialog] = useState<boolean>(false);
@@ -104,6 +107,12 @@ export const POSScreen: React.FC<POSScreenProps> = ({
     })),
     billDiscountPercent,
   });
+
+  const hasScheduleHDrugs = lines.some((l) =>
+    /amox|cefix|azith|cipro|clonaz|alpra|tramad|sched|antib|metronid|pregab|levoflox/i.test(
+      (l.genericName || '') + ' ' + (l.productName || '')
+    )
+  );
 
   const focusedLine = lines[focusedIndex] ?? null;
 
@@ -378,6 +387,8 @@ export const POSScreen: React.FC<POSScreenProps> = ({
       customerId: customer?.id,
       customerName: customer?.name,
       customerPhone: customer?.phone,
+      doctorId: doctor?.id,
+      doctorName: doctor?.name,
       billDiscountPercent,
       payments: [
         {
@@ -411,6 +422,7 @@ export const POSScreen: React.FC<POSScreenProps> = ({
       // Clear current bill
       setLines([]);
       setCustomer(null);
+      setDoctor(null);
       setBillDiscountPercent(0);
       setCashReceivedInput('');
     } catch (err: any) {
@@ -452,12 +464,15 @@ export const POSScreen: React.FC<POSScreenProps> = ({
         {/* Right 40%: Customer, Totals & Payment */}
         <TotalsAndPaymentPanel
           customer={customer}
+          doctor={doctor}
+          hasScheduleHDrugs={hasScheduleHDrugs}
           focusedLine={focusedLine}
           totals={totals}
           billDiscountPercent={billDiscountPercent}
           paymentMode={paymentMode}
           cashReceivedInput={cashReceivedInput}
           onSelectCustomerClick={() => setShowCustomerDialog(true)}
+          onSelectDoctorClick={() => setShowDoctorDialog(true)}
           onBillDiscountChange={setBillDiscountPercent}
           onPaymentModeChange={setPaymentMode}
           onCashReceivedChange={setCashReceivedInput}
@@ -533,6 +548,14 @@ export const POSScreen: React.FC<POSScreenProps> = ({
         <CustomerDialog
           onSelectCustomer={setCustomer}
           onClose={() => setShowCustomerDialog(false)}
+        />
+      )}
+
+      {showDoctorDialog && (
+        <DoctorDialog
+          currentDoctor={doctor}
+          onSelectDoctor={setDoctor}
+          onClose={() => setShowDoctorDialog(false)}
         />
       )}
 

@@ -1,16 +1,20 @@
 import React from 'react';
-import { User, Phone, MapPin, CreditCard, Banknote, QrCode, Building, CheckCircle2 } from 'lucide-react';
+import { User, Phone, MapPin, CreditCard, Banknote, QrCode, Building, CheckCircle2, Stethoscope, AlertTriangle } from 'lucide-react';
 import { formatPaiseToINR, CalculatedInvoiceTotals } from '@algions/domain';
 import { BillGridLine } from './BillGrid.js';
+import { DoctorInfo } from './dialogs/DoctorDialog.js';
 
 interface TotalsAndPaymentPanelProps {
   customer: { id?: string; name: string; phone: string; balancePaise: number } | null;
+  doctor?: DoctorInfo | null;
+  hasScheduleHDrugs?: boolean;
   focusedLine: BillGridLine | null;
   totals: CalculatedInvoiceTotals;
   billDiscountPercent: number;
   paymentMode: 'CASH' | 'UPI' | 'CARD' | 'BANK' | 'CREDIT';
   cashReceivedInput: string;
   onSelectCustomerClick: () => void;
+  onSelectDoctorClick?: () => void;
   onBillDiscountChange: (val: number) => void;
   onPaymentModeChange: (mode: 'CASH' | 'UPI' | 'CARD' | 'BANK' | 'CREDIT') => void;
   onCashReceivedChange: (val: string) => void;
@@ -19,12 +23,15 @@ interface TotalsAndPaymentPanelProps {
 
 export const TotalsAndPaymentPanel: React.FC<TotalsAndPaymentPanelProps> = ({
   customer,
+  doctor,
+  hasScheduleHDrugs = false,
   focusedLine,
   totals,
   billDiscountPercent,
   paymentMode,
   cashReceivedInput,
   onSelectCustomerClick,
+  onSelectDoctorClick,
   onBillDiscountChange,
   onPaymentModeChange,
   onCashReceivedChange,
@@ -36,7 +43,7 @@ export const TotalsAndPaymentPanel: React.FC<TotalsAndPaymentPanelProps> = ({
   return (
     <div className="w-full xl:w-[380px] bg-slate-50 flex flex-col justify-between overflow-y-auto border-t xl:border-t-0 xl:border-l border-slate-200 p-3 sm:p-4 select-none flex-shrink-0">
       {/* 1. Customer Card (F3) */}
-      <div className="mb-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+      <div className="mb-2 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
         <div className="flex items-center justify-between mb-1.5">
           <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
             Customer Details
@@ -63,6 +70,57 @@ export const TotalsAndPaymentPanel: React.FC<TotalsAndPaymentPanelProps> = ({
         ) : (
           <div className="text-xs text-slate-400 italic">
             Counter Cash Sale (Walk-in Customer)
+          </div>
+        )}
+      </div>
+
+      {/* 2. Doctor / Prescriber Card (Rx / Schedule H) */}
+      <div className={`mb-3 p-3 rounded-xl border shadow-sm transition ${
+        hasScheduleHDrugs && !doctor
+          ? 'bg-amber-50/80 border-amber-300'
+          : 'bg-white border-slate-200'
+      }`}>
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+            <Stethoscope className="w-3.5 h-3.5 text-teal-600" />
+            <span>Prescribing Doctor (Rx)</span>
+          </div>
+          {onSelectDoctorClick && (
+            <button
+              onClick={onSelectDoctorClick}
+              className="text-xs text-teal-600 font-semibold hover:text-teal-700 hover:underline"
+            >
+              {doctor ? 'Change' : '+ Attach Doctor'}
+            </button>
+          )}
+        </div>
+
+        {doctor ? (
+          <div>
+            <div className="flex items-center gap-1.5 font-bold text-slate-800 text-xs">
+              <span>{doctor.name}</span>
+              {doctor.specialization && (
+                <span className="text-[10px] text-teal-700 bg-teal-100/60 px-1.5 py-0.2 rounded font-normal">
+                  {doctor.specialization}
+                </span>
+              )}
+            </div>
+            <div className="text-[11px] text-slate-500 mt-0.5">
+              {doctor.regNumber ? `Reg: ${doctor.regNumber}` : 'Prescription Verified'}
+              {doctor.hospitalClinic ? ` • ${doctor.hospitalClinic}` : ''}
+            </div>
+          </div>
+        ) : (
+          <div className="text-xs text-slate-400 italic flex items-center justify-between">
+            <span>{hasScheduleHDrugs ? '⚠️ Schedule H drug in cart — attach Rx' : 'No doctor attached (OTC Sale)'}</span>
+            {hasScheduleHDrugs && onSelectDoctorClick && (
+              <button
+                onClick={onSelectDoctorClick}
+                className="text-amber-800 font-bold text-[11px] underline"
+              >
+                Attach Rx
+              </button>
+            )}
           </div>
         )}
       </div>

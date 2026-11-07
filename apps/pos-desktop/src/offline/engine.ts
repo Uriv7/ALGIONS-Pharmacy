@@ -16,6 +16,11 @@ export interface LocalOfflineInvoice {
   itemCount: number;
   totalUnits: number;
   grandTotalPaise: number;
+  customerId?: string;
+  customerName?: string;
+  customerPhone?: string;
+  doctorId?: string;
+  doctorName?: string;
   lines: any[];
   payments: any[];
   occurredAtLocal: string;
@@ -104,6 +109,11 @@ class OfflineEngine {
       itemCount: totals.itemCount,
       totalUnits: totals.totalUnits,
       grandTotalPaise: totals.grandTotalPaise,
+      customerId: payload.customerId,
+      customerName: payload.customerName,
+      customerPhone: payload.customerPhone,
+      doctorId: payload.doctorId,
+      doctorName: payload.doctorName,
       lines: totals.lines,
       payments: payload.payments,
       occurredAtLocal: nowIso,
@@ -136,6 +146,8 @@ class OfflineEngine {
         customerId: payload.customerId,
         customerName: payload.customerName,
         customerPhone: payload.customerPhone,
+        doctorId: payload.doctorId,
+        doctorName: payload.doctorName,
       },
       lines: totals.lines,
       payments: payload.payments,

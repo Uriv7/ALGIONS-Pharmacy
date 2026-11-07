@@ -12,10 +12,13 @@ import {
   Plus,
   ArrowRight,
   ShieldCheck,
+  Printer,
+  Barcode as BarcodeIcon,
 } from 'lucide-react';
 import { api } from '../api/client.js';
 import { formatPaiseToINR, isBatchNearExpiry, isBatchExpired } from '@algions/domain';
 import { AuthSessionUser } from '@algions/contracts';
+import { BarcodeLabelPrintDialog } from '../components/dialogs/BarcodeLabelPrintDialog.js';
 
 interface StockCheckScreenProps {
   user?: AuthSessionUser;
@@ -29,6 +32,7 @@ export const StockCheckScreen: React.FC<StockCheckScreenProps> = ({ user }) => {
   const [filterMode, setFilterMode] = useState<'ALL' | 'NEAR_EXPIRY' | 'EXPIRED'>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
+  const [barcodePrintProduct, setBarcodePrintProduct] = useState<any | null>(null);
 
   // Stock Audit State (INV-010)
   const [auditCounts, setAuditCounts] = useState<Record<string, number>>({});
@@ -256,18 +260,19 @@ export const StockCheckScreen: React.FC<StockCheckScreenProps> = ({ user }) => {
                     <th className="py-2.5 px-3 text-right">MRP</th>
                     <th className="py-2.5 px-3 text-right">Sale Rate</th>
                     <th className="py-2.5 px-4 text-center">Available Stock</th>
+                    <th className="py-2.5 px-3 text-center">Barcode</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {loading ? (
                     <tr>
-                      <td colSpan={8} className="py-12 text-center text-slate-400">
+                      <td colSpan={9} className="py-12 text-center text-slate-400">
                         Loading stock records...
                       </td>
                     </tr>
                   ) : filteredBatches.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-12 text-center text-slate-400">
+                      <td colSpan={9} className="py-12 text-center text-slate-400">
                         No batches match the selected criteria.
                       </td>
                     </tr>
@@ -305,6 +310,15 @@ export const StockCheckScreen: React.FC<StockCheckScreenProps> = ({ user }) => {
                         </td>
                         <td className="py-2.5 px-4 text-center font-black text-emerald-700 text-sm">
                           {b.quantity} loose
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          <button
+                            onClick={() => setBarcodePrintProduct(b)}
+                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-teal-50 hover:text-teal-700 text-slate-500 transition"
+                            title="Print Barcode & Shelf Label"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                          </button>
                         </td>
                       </tr>
                     ))
@@ -505,6 +519,22 @@ export const StockCheckScreen: React.FC<StockCheckScreenProps> = ({ user }) => {
             </table>
           </div>
         </div>
+      )}
+      {/* Barcode & Shelf Label Print Dialog */}
+      {barcodePrintProduct && (
+        <BarcodeLabelPrintDialog
+          product={{
+            brandName: barcodePrintProduct.brandName,
+            genericName: barcodePrintProduct.genericName,
+            strength: barcodePrintProduct.strength,
+            barcode: barcodePrintProduct.barcode || '8901031045022',
+            mrpPaise: barcodePrintProduct.mrpPaise,
+            batchNumber: barcodePrintProduct.batchNumber,
+            expiryDate: barcodePrintProduct.expiryDate,
+            rackLocation: barcodePrintProduct.rackLocation,
+          }}
+          onClose={() => setBarcodePrintProduct(null)}
+        />
       )}
     </div>
   );
