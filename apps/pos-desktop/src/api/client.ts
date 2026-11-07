@@ -174,6 +174,10 @@ export class ApiClient {
     return this.request<{ suppliers: any[] }>('/suppliers');
   }
 
+  async getPurchases(): Promise<{ purchases: any[] }> {
+    return this.request<{ purchases: any[] }>('/purchases');
+  }
+
   async createPurchase(payload: any): Promise<any> {
     return this.request<any>('/purchases', {
       method: 'POST',
