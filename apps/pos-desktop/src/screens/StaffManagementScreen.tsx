@@ -8,6 +8,7 @@ import {
   CheckCircle,
   Hash,
   RefreshCw,
+  Edit2,
 } from 'lucide-react';
 import { api } from '../api/client.js';
 
@@ -17,14 +18,16 @@ export const StaffManagementScreen: React.FC = () => {
   const [tamperCheck, setTamperCheck] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<'STAFF' | 'AUDIT'>('STAFF');
 
-  // New staff form state
+  // Staff user form state (Add & Edit)
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingUser, setEditingUser] = useState<any | null>(null);
   const [username, setUsername] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [pin, setPin] = useState('');
   const [maxDiscount, setMaxDiscount] = useState('5');
   const [creating, setCreating] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
 
   const fetchData = async () => {
     try {
@@ -43,25 +46,38 @@ export const StaffManagementScreen: React.FC = () => {
     fetchData();
   }, []);
 
-  const handleCreateStaff = async (e: React.FormEvent) => {
+  const handleSaveStaff = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreating(true);
     try {
-      await api.createStaffUser({
-        username,
-        name,
-        password,
-        quickPin: pin,
-        maxDiscountPercent: Number(maxDiscount),
-      });
+      if (editingUser) {
+        await api.updateStaffUser(editingUser.id, {
+          name: name.trim(),
+          maxDiscountPercent: Number(maxDiscount),
+          password: password.trim() ? password.trim() : undefined,
+          quickPin: pin.trim() ? pin.trim() : undefined,
+        });
+        setMsg(`Staff account for ${name} updated successfully.`);
+      } else {
+        await api.createStaffUser({
+          username: username.trim(),
+          name: name.trim(),
+          password,
+          quickPin: pin || undefined,
+          maxDiscountPercent: Number(maxDiscount),
+        });
+        setMsg(`Staff account for ${name} created successfully.`);
+      }
       setShowAddModal(false);
+      setEditingUser(null);
       setUsername('');
       setName('');
       setPassword('');
       setPin('');
+      setMaxDiscount('5');
       await fetchData();
     } catch (err: any) {
-      alert(`Error creating staff: ${err.message}`);
+      alert(`Error saving staff: ${err.message}`);
     } finally {
       setCreating(false);
     }
@@ -110,7 +126,15 @@ export const StaffManagementScreen: React.FC = () => {
 
           {activeTab === 'STAFF' && (
             <button
-              onClick={() => setShowAddModal(true)}
+              onClick={() => {
+                setEditingUser(null);
+                setUsername('');
+                setName('');
+                setPassword('');
+                setPin('');
+                setMaxDiscount('5');
+                setShowAddModal(true);
+              }}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-bold shadow transition"
             >
               <UserPlus className="w-3.5 h-3.5" />
@@ -119,6 +143,15 @@ export const StaffManagementScreen: React.FC = () => {
           )}
         </div>
       </div>
+
+      {msg && (
+        <div className="mb-3 p-3 bg-teal-50 border border-teal-200 text-teal-800 text-xs rounded-lg font-semibold flex items-center justify-between">
+          <span>{msg}</span>
+          <button onClick={() => setMsg(null)} className="text-teal-600 hover:text-teal-900 font-bold">
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {activeTab === 'STAFF' ? (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex-1 overflow-x-auto overflow-y-auto">
@@ -131,6 +164,7 @@ export const StaffManagementScreen: React.FC = () => {
                 <th className="py-2.5 px-4">MFA Status</th>
                 <th className="py-2.5 px-4">Status</th>
                 <th className="py-2.5 px-4">Created Date</th>
+                <th className="py-2.5 px-4 text-center">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -170,6 +204,23 @@ export const StaffManagementScreen: React.FC = () => {
                   </td>
                   <td className="py-3 px-4 text-slate-500">
                     {new Date(u.createdAt).toLocaleDateString()}
+                  </td>
+                  <td className="py-3 px-4 text-center">
+                    <button
+                      onClick={() => {
+                        setEditingUser(u);
+                        setName(u.name);
+                        setUsername(u.username);
+                        setPassword('');
+                        setPin('');
+                        setMaxDiscount(String(u.maxDiscountPercent || 5));
+                        setShowAddModal(true);
+                      }}
+                      className="p-1.5 rounded-lg bg-slate-100 hover:bg-teal-50 hover:text-teal-700 text-slate-500 transition"
+                      title="Edit Staff Account"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -229,16 +280,20 @@ export const StaffManagementScreen: React.FC = () => {
         </div>
       )}
 
-      {/* Modal: Add Staff User */}
+      {/* Modal: Add / Edit Staff User */}
       {showAddModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md border border-slate-200">
-            <h2 className="text-base font-bold text-slate-800 mb-1">Add Staff Account</h2>
+            <h2 className="text-base font-bold text-slate-800 mb-1">
+              {editingUser ? 'Edit Staff Account' : 'Add Staff Account'}
+            </h2>
             <p className="text-xs text-slate-500 mb-4">
-              Staff accounts have restricted permissions (cannot view overall financials or change settings).
+              {editingUser
+                ? `Update staff credentials and permissions for @${editingUser.username}.`
+                : 'Staff accounts have restricted permissions (cannot view overall financials or change settings).'}
             </p>
 
-            <form onSubmit={handleCreateStaff} className="space-y-3">
+            <form onSubmit={handleSaveStaff} className="space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Full Name</label>
                 <input
@@ -256,36 +311,45 @@ export const StaffManagementScreen: React.FC = () => {
                 <input
                   type="text"
                   value={username}
+                  disabled={Boolean(editingUser)}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs"
+                  className={`w-full px-3 py-2 border rounded-lg text-xs ${
+                    editingUser
+                      ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                      : 'border-slate-300'
+                  }`}
                   placeholder="e.g. ramesh"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Initial Password</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  {editingUser ? 'Reset Password (Optional — leave blank to keep)' : 'Initial Password'}
+                </label>
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs"
-                  placeholder="Min 8 characters"
-                  required
+                  placeholder={editingUser ? 'Leave blank to keep existing password' : 'Min 10 characters'}
+                  required={!editingUser}
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Quick PIN (4 Digits)</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    {editingUser ? 'Reset PIN (4 Digits)' : 'Quick PIN (4 Digits)'}
+                  </label>
                   <input
                     type="password"
                     maxLength={4}
                     value={pin}
                     onChange={(e) => setPin(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs tracking-widest text-center"
-                    placeholder="1234"
-                    required
+                    placeholder={editingUser ? 'Keep current' : '1234'}
+                    required={!editingUser}
                   />
                 </div>
 
@@ -306,7 +370,10 @@ export const StaffManagementScreen: React.FC = () => {
               <div className="flex gap-2 pt-4">
                 <button
                   type="button"
-                  onClick={() => setShowAddModal(false)}
+                  onClick={() => {
+                    setShowAddModal(false);
+                    setEditingUser(null);
+                  }}
                   className="flex-1 py-2 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                 >
                   Cancel
@@ -316,7 +383,7 @@ export const StaffManagementScreen: React.FC = () => {
                   disabled={creating}
                   className="flex-1 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow"
                 >
-                  {creating ? 'Saving...' : 'Create Account'}
+                  {creating ? 'Saving...' : editingUser ? 'Save Changes' : 'Create Account'}
                 </button>
               </div>
             </form>

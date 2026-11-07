@@ -149,6 +149,13 @@ export class ApiClient {
     return this.request<{ batches: any[] }>('/stock/batches');
   }
 
+  async updateBatch(id: string, payload: { rackLocation?: string; saleRatePaise?: number }): Promise<any> {
+    return this.request<any>(`/stock/batches/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  }
+
   async getExpiryList(thresholdDays = 90): Promise<any> {
     return this.request<any>(`/stock/expiry?thresholdDays=${thresholdDays}`);
   }
@@ -224,6 +231,13 @@ export class ApiClient {
     });
   }
 
+  async updateStaffUser(id: string, user: any): Promise<any> {
+    return this.request<any>(`/owner/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(user),
+    });
+  }
+
   async getAuditLogs(): Promise<{ logs: any[]; tamperCheckPassed: boolean }> {
     return this.request<{ logs: any[]; tamperCheckPassed: boolean }>('/owner/audit/logs');
   }
@@ -256,6 +270,13 @@ export class ApiClient {
   async createCustomer(customer: any): Promise<any> {
     return this.request<any>('/customers', {
       method: 'POST',
+      body: JSON.stringify(customer),
+    });
+  }
+
+  async updateCustomer(id: string, customer: any): Promise<any> {
+    return this.request<any>(`/customers/${id}`, {
+      method: 'PUT',
       body: JSON.stringify(customer),
     });
   }
@@ -337,6 +358,13 @@ export class ApiClient {
   async createSupplier(supplier: any): Promise<any> {
     return this.request<any>('/suppliers', {
       method: 'POST',
+      body: JSON.stringify(supplier),
+    });
+  }
+
+  async updateSupplier(id: string, supplier: any): Promise<any> {
+    return this.request<any>(`/suppliers/${id}`, {
+      method: 'PUT',
       body: JSON.stringify(supplier),
     });
   }

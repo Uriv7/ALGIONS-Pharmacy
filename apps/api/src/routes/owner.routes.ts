@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { authenticateToken, requireOwner, requireStepUpAuth } from '../middleware/auth.js';
-import { CreateStaffUserSchema, StoreMode } from '@algions/contracts';
+import { CreateStaffUserSchema, UpdateStaffUserSchema, StoreMode } from '@algions/contracts';
 import { hashPassword, hashPin } from '@algions/db';
 import { generateUUIDv7 } from '@algions/domain';
 import { AppError } from '../middleware/error.js';
@@ -197,6 +197,58 @@ ownerRouter.post('/users', authenticateToken, requireOwner, async (req: Request,
       maxDiscountPercent: body.maxDiscountPercent,
       status: 'ACTIVE',
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PUT /users/:id (Edit staff details - Owner only)
+ownerRouter.put('/users/:id', authenticateToken, requireOwner, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const targetUserId = Array.isArray(req.params.id) ? req.params.id[0]! : req.params.id!;
+    const storeId = req.user!.storeId;
+    const body = UpdateStaffUserSchema.parse(req.body);
+
+    const targetUser = await req.db.queryOne<{ account_type: string; id: string }>(
+      'SELECT id, account_type FROM users WHERE id = $1 AND store_id = $2',
+      [targetUserId, storeId]
+    );
+
+    if (!targetUser) {
+      throw new AppError(404, 'NOT_FOUND', 'User Not Found', 'Staff account does not exist.');
+    }
+
+    const nowIso = new Date().toISOString();
+    let passwordHash: string | null = null;
+    if (body.password && body.password.trim().length >= 10) {
+      passwordHash = hashPassword(body.password.trim());
+    }
+
+    let pinHash: string | null = null;
+    if (body.quickPin && body.quickPin.trim().length === 4) {
+      pinHash = hashPin(body.quickPin.trim());
+    }
+
+    await req.db.execute(
+      `UPDATE users SET
+         name = COALESCE($1, name),
+         max_discount_percent = COALESCE($2, max_discount_percent),
+         password_hash = CASE WHEN $3 IS NOT NULL THEN $3 ELSE password_hash END,
+         quick_pin_hash = CASE WHEN $4 IS NOT NULL THEN $4 ELSE quick_pin_hash END,
+         updated_at = $5
+       WHERE id = $6 AND store_id = $7`,
+      [
+        body.name ?? null,
+        body.maxDiscountPercent ?? null,
+        passwordHash,
+        pinHash,
+        nowIso,
+        targetUserId,
+        storeId,
+      ]
+    );
+
+    res.json({ success: true, message: 'Staff user updated successfully.' });
   } catch (err) {
     next(err);
   }

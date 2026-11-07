@@ -274,4 +274,133 @@ describe('ALGIONS Pharmacy - API Integration & Business Rules Tests', () => {
     assert.ok(dashData.todaySalesPaise > 0);
     assert.strictEqual(dashData.isStale, false);
   });
+
+  it('PUT /customers/:id enforces role-based credit limit guards', async () => {
+    // 1. Fetch customer
+    const listRes = await fetch(`${baseUrl}/customers`, {
+      headers: { Authorization: `Bearer ${staffToken}` },
+    });
+    assert.strictEqual(listRes.status, 200);
+    const listData = await listRes.json();
+    const cust = listData.customers[0];
+    assert.ok(cust);
+
+    // 2. Staff updates contact info within allowed limit -> Success
+    const staffUpdateRes = await fetch(`${baseUrl}/customers/${cust.id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${staffToken}`,
+      },
+      body: JSON.stringify({
+        address: '42 Sector 15 Rohini, New Delhi',
+        creditLimitPaise: 200000, // ₹2,000 max for staff
+      }),
+    });
+    assert.strictEqual(staffUpdateRes.status, 200);
+
+    // 3. Staff attempts to set credit limit > ₹2,000 -> 403 FORBIDDEN
+    const staffExceedRes = await fetch(`${baseUrl}/customers/${cust.id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${staffToken}`,
+      },
+      body: JSON.stringify({
+        creditLimitPaise: 500000, // ₹5,000
+      }),
+    });
+    assert.strictEqual(staffExceedRes.status, 403);
+
+    // 4. Owner sets high credit limit -> 200 OK
+    const ownerUpdateRes = await fetch(`${baseUrl}/customers/${cust.id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${ownerToken}`,
+      },
+      body: JSON.stringify({
+        creditLimitPaise: 1000000, // ₹10,000
+      }),
+    });
+    assert.strictEqual(ownerUpdateRes.status, 200);
+  });
+
+  it('PUT /suppliers/:id restricts distributor edits strictly to Owner', async () => {
+    const listRes = await fetch(`${baseUrl}/suppliers`, {
+      headers: { Authorization: `Bearer ${ownerToken}` },
+    });
+    assert.strictEqual(listRes.status, 200);
+    const listData = await listRes.json();
+    const supp = listData.suppliers[0];
+    assert.ok(supp);
+
+    // Staff cannot edit supplier -> 403
+    const staffEditRes = await fetch(`${baseUrl}/suppliers/${supp.id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${staffToken}`,
+      },
+      body: JSON.stringify({ name: 'Hacked Distributor' }),
+    });
+    assert.strictEqual(staffEditRes.status, 403);
+
+    // Owner can edit supplier -> 200
+    const ownerEditRes = await fetch(`${baseUrl}/suppliers/${supp.id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${ownerToken}`,
+      },
+      body: JSON.stringify({ creditPeriodDays: 45 }),
+    });
+    assert.strictEqual(ownerEditRes.status, 200);
+  });
+
+  it('PUT /stock/batches/:id allows shelf rack updates for all staff, but protects sale rates and MRP ceilings', async () => {
+    // 1. Staff can update rack location -> 200
+    const staffRackRes = await fetch(`${baseUrl}/stock/batches/${doloBatchId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${staffToken}`,
+      },
+      body: JSON.stringify({ rackLocation: 'Rack A-01-Shelf-2' }),
+    });
+    assert.strictEqual(staffRackRes.status, 200);
+
+    // 2. Staff cannot change sale rate -> 403
+    const staffRateRes = await fetch(`${baseUrl}/stock/batches/${doloBatchId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${staffToken}`,
+      },
+      body: JSON.stringify({ saleRatePaise: 100 }),
+    });
+    assert.strictEqual(staffRateRes.status, 403);
+
+    // 3. Owner cannot exceed printed MRP ceiling -> 400
+    const ownerExceedMrpRes = await fetch(`${baseUrl}/stock/batches/${doloBatchId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${ownerToken}`,
+      },
+      body: JSON.stringify({ saleRatePaise: 999999 }), // MRP is 225 paise
+    });
+    assert.strictEqual(ownerExceedMrpRes.status, 400);
+
+    // 4. Owner can update valid sale rate -> 200
+    const ownerValidRes = await fetch(`${baseUrl}/stock/batches/${doloBatchId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${ownerToken}`,
+      },
+      body: JSON.stringify({ saleRatePaise: 215, rackLocation: 'Rack A-01-Counter' }),
+    });
+    assert.strictEqual(ownerValidRes.status, 200);
+  });
 });

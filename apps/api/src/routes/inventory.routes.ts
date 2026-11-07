@@ -12,7 +12,7 @@ import {
   isBatchNearExpiry,
   getDaysUntilExpiry,
 } from '@algions/domain';
-import { z } from '@algions/contracts';
+import { z, UpdateBatchSchema } from '@algions/contracts';
 
 export const inventoryRouter = Router();
 
@@ -69,6 +69,74 @@ inventoryRouter.get('/batches', authenticateToken, async (req: Request, res: Res
     }));
 
     res.json({ batches: rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PUT /stock/batches/:id (Update batch rack location & selling price - INV-004 / INV-011)
+inventoryRouter.put('/batches/:id', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const batchId = Array.isArray(req.params.id) ? req.params.id[0]! : req.params.id!;
+    const storeId = req.user!.storeId;
+    const body = UpdateBatchSchema.parse(req.body);
+
+    const existing = await req.db.queryOne<{
+      id: string;
+      mrp_paise: number;
+      sale_rate_paise: number;
+      rack_location: string;
+    }>('SELECT id, mrp_paise, sale_rate_paise, rack_location FROM batches WHERE id = $1 AND store_id = $2', [
+      batchId,
+      storeId,
+    ]);
+
+    if (!existing) {
+      throw new AppError(404, 'NOT_FOUND', 'Batch Not Found', 'Inventory batch does not exist.');
+    }
+
+    // Role safety: Only Owners can change the sale rate. Staff can only move rack/shelf location.
+    if (body.saleRatePaise !== undefined && req.user!.accountType !== 'OWNER') {
+      throw new AppError(
+        403,
+        'FORBIDDEN',
+        'Owner Authority Required',
+        'Staff members cannot adjust medicine selling prices. Owner authorization required.'
+      );
+    }
+
+    // DPCO / Legal Price Ceiling Check: Sale rate cannot exceed Maximum Retail Price (MRP)
+    if (body.saleRatePaise !== undefined && body.saleRatePaise > Number(existing.mrp_paise)) {
+      throw new AppError(
+        400,
+        'VALIDATION_ERROR',
+        'MRP Ceiling Exceeded',
+        `Selling price (₹${(body.saleRatePaise / 100).toFixed(2)}) cannot exceed printed MRP of ₹${(Number(existing.mrp_paise) / 100).toFixed(2)}.`
+      );
+    }
+
+    const nowIso = new Date().toISOString();
+    await req.db.execute(
+      `UPDATE batches SET
+         rack_location = COALESCE($1, rack_location),
+         sale_rate_paise = COALESCE($2, sale_rate_paise),
+         updated_at = $3
+       WHERE id = $4 AND store_id = $5`,
+      [
+        body.rackLocation !== undefined ? (body.rackLocation.trim() || 'Shelf') : null,
+        body.saleRatePaise !== undefined ? body.saleRatePaise : null,
+        nowIso,
+        batchId,
+        storeId,
+      ]
+    );
+
+    const updated = await req.db.queryOne(
+      'SELECT id, batch_number, rack_location, sale_rate_paise, mrp_paise FROM batches WHERE id = $1',
+      [batchId]
+    );
+
+    res.json({ success: true, message: 'Batch updated successfully.', batch: updated });
   } catch (err) {
     next(err);
   }

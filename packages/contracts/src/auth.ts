@@ -44,6 +44,14 @@ export const CreateStaffUserSchema = z.object({
 });
 export type CreateStaffUser = z.infer<typeof CreateStaffUserSchema>;
 
+export const UpdateStaffUserSchema = z.object({
+  name: z.string().min(1).optional(),
+  password: z.string().min(10, 'Password must be at least 10 characters').optional().or(z.literal('')),
+  quickPin: z.string().length(4).regex(/^\d+$/).optional().or(z.literal('')),
+  maxDiscountPercent: z.number().min(0).max(100).optional(),
+});
+export type UpdateStaffUser = z.infer<typeof UpdateStaffUserSchema>;
+
 export interface AuthSessionUser {
   id: string;
   username: string;

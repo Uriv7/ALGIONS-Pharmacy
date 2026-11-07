@@ -56,6 +56,12 @@ export const BatchSchema = z.object({
 });
 export type BatchDTO = z.infer<typeof BatchSchema>;
 
+export const UpdateBatchSchema = z.object({
+  rackLocation: z.string().optional(),
+  saleRatePaise: z.number().int().positive().optional(),
+});
+export type UpdateBatchDTO = z.infer<typeof UpdateBatchSchema>;
+
 export interface ProductSearchResult {
   product: ProductDTO;
   totalStockUnits: number;

@@ -39,9 +39,9 @@ export class SqliteDatabaseClient implements IDatabase {
   }
 
   private normalizeSql(sql: string): string {
-    // Convert PostgreSQL $1, $2, $3 syntax to SQLite ?
+    // Convert PostgreSQL $1, $2, $3 syntax to SQLite indexed parameters ?1, ?2, ?3
     // Also strip FOR UPDATE which is not used in SQLite single-writer WAL
-    return sql.replace(/\$\d+/g, '?').replace(/\s+FOR\s+UPDATE/gi, '');
+    return sql.replace(/\$(\d+)/g, '?$1').replace(/\s+FOR\s+UPDATE/gi, '');
   }
 
   private serializeParams(params?: unknown[]): unknown[] {

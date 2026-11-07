@@ -10,6 +10,7 @@ import {
   CheckCircle,
   AlertCircle,
   Clock,
+  Edit2,
 } from 'lucide-react';
 import { formatPaiseToINR } from '@algions/domain';
 import { api } from '../api/client.js';
@@ -26,8 +27,9 @@ export const SupplierManagementScreen: React.FC<SupplierManagementScreenProps> =
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
 
-  // Add Supplier Modal
+  // Supplier Modal (Add & Edit - PUR-001)
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingSupplier, setEditingSupplier] = useState<any | null>(null);
   const [name, setName] = useState('');
   const [gstin, setGstin] = useState('');
   const [phone, setPhone] = useState('');
@@ -63,26 +65,36 @@ export const SupplierManagementScreen: React.FC<SupplierManagementScreenProps> =
     fetchSuppliers();
   }, []);
 
-  const handleCreateSupplier = async (e: React.FormEvent) => {
+  const handleSaveSupplier = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     try {
-      await api.createSupplier({
-        name,
-        gstin: gstin.toUpperCase(),
-        phone: phone || undefined,
-        address: address || undefined,
-        creditPeriodDays: parseInt(creditPeriod, 10),
-      });
+      const payload = {
+        name: name.trim(),
+        gstin: gstin.trim().toUpperCase() || undefined,
+        phone: phone.trim() || undefined,
+        address: address.trim() || undefined,
+        creditPeriodDays: parseInt(creditPeriod, 10) || 30,
+      };
+
+      if (editingSupplier) {
+        await api.updateSupplier(editingSupplier.id, payload);
+        setMsg(`Supplier ${name} updated successfully.`);
+      } else {
+        await api.createSupplier(payload);
+        setMsg(`Supplier ${name} registered successfully.`);
+      }
+
       setShowAddModal(false);
+      setEditingSupplier(null);
       setName('');
       setGstin('');
       setPhone('');
       setAddress('');
-      setMsg(`Supplier ${name} created successfully.`);
+      setCreditPeriod('21');
       fetchSuppliers();
     } catch (err: any) {
-      alert(err.message || 'Error creating supplier');
+      alert(err.message || 'Error saving supplier');
     } finally {
       setSaving(false);
     }
@@ -160,7 +172,15 @@ export const SupplierManagementScreen: React.FC<SupplierManagementScreenProps> =
 
           {user.accountType === 'OWNER' && (
             <button
-              onClick={() => setShowAddModal(true)}
+              onClick={() => {
+                setEditingSupplier(null);
+                setName('');
+                setGstin('');
+                setPhone('');
+                setAddress('');
+                setCreditPeriod('21');
+                setShowAddModal(true);
+              }}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white rounded-lg text-xs font-bold shadow transition"
             >
               <Plus className="w-4 h-4" />
@@ -404,21 +424,40 @@ export const SupplierManagementScreen: React.FC<SupplierManagementScreenProps> =
                         </span>
                       </td>
                       <td className="py-3 px-4 text-center">
-                        {payable > 0 ? (
-                          <button
-                            onClick={() => {
-                              setPaySupplier(s);
-                              setPayAmount((payable / 100).toFixed(2));
-                            }}
-                            className="px-3 py-1 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white rounded text-[11px] font-bold shadow-sm transition"
-                          >
-                            Pay Supplier
-                          </button>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500">
-                            Settled
-                          </span>
-                        )}
+                        <div className="flex items-center justify-center gap-1.5">
+                          {user.accountType === 'OWNER' && (
+                            <button
+                              onClick={() => {
+                                setEditingSupplier(s);
+                                setName(s.name);
+                                setGstin(s.gstin || '');
+                                setPhone(s.phone || '');
+                                setAddress(s.address || '');
+                                setCreditPeriod(String(s.creditPeriodDays || 30));
+                                setShowAddModal(true);
+                              }}
+                              className="p-1.5 rounded-lg bg-slate-100 hover:bg-teal-50 hover:text-teal-700 text-slate-500 transition"
+                              title="Edit Supplier Details"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {payable > 0 ? (
+                            <button
+                              onClick={() => {
+                                setPaySupplier(s);
+                                setPayAmount((payable / 100).toFixed(2));
+                              }}
+                              className="px-2.5 py-1 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white rounded text-[11px] font-bold shadow-sm transition"
+                            >
+                              Pay Supplier
+                            </button>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500">
+                              Settled
+                            </span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -430,16 +469,20 @@ export const SupplierManagementScreen: React.FC<SupplierManagementScreenProps> =
       </div>
       )}
 
-      {/* Modal: Add Supplier */}
+      {/* Modal: Add / Edit Supplier */}
       {showAddModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md border border-slate-200">
-            <h2 className="text-base font-bold text-slate-800 mb-1">Add Supplier / Distributor</h2>
+            <h2 className="text-base font-bold text-slate-800 mb-1">
+              {editingSupplier ? 'Edit Supplier / Distributor (PUR-001)' : 'Add Supplier / Distributor (PUR-001)'}
+            </h2>
             <p className="text-xs text-slate-500 mb-4">
-              Register authorized pharmaceutical stockist for purchase inwarding.
+              {editingSupplier
+                ? 'Update authorized pharmaceutical stockist record and credit terms.'
+                : 'Register authorized pharmaceutical stockist for purchase inwarding.'}
             </p>
 
-            <form onSubmit={handleCreateSupplier} className="space-y-3">
+            <form onSubmit={handleSaveSupplier} className="space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Distributor Name *</label>
                 <input
@@ -502,7 +545,10 @@ export const SupplierManagementScreen: React.FC<SupplierManagementScreenProps> =
               <div className="flex gap-2 pt-3">
                 <button
                   type="button"
-                  onClick={() => setShowAddModal(false)}
+                  onClick={() => {
+                    setShowAddModal(false);
+                    setEditingSupplier(null);
+                  }}
                   className="flex-1 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50"
                 >
                   Cancel
@@ -512,7 +558,7 @@ export const SupplierManagementScreen: React.FC<SupplierManagementScreenProps> =
                   disabled={saving}
                   className="flex-1 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-bold shadow"
                 >
-                  {saving ? 'Saving...' : 'Register Supplier'}
+                  {saving ? 'Saving...' : editingSupplier ? 'Save Changes' : 'Register Supplier'}
                 </button>
               </div>
             </form>

@@ -62,6 +62,52 @@ purchasesRouter.post(['/suppliers', '/'], authenticateToken, requireOwner, async
   }
 });
 
+// PUT /suppliers/:id (Owner only supplier edit - PUR-001)
+purchasesRouter.put(['/suppliers/:id', '/:id'], authenticateToken, requireOwner, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const supplierId = Array.isArray(req.params.id) ? req.params.id[0]! : req.params.id!;
+    const storeId = req.user!.storeId;
+    const body = SupplierSchema.partial().parse(req.body);
+
+    const existing = await req.db.queryOne<{ id: string }>('SELECT id FROM suppliers WHERE id = $1 AND store_id = $2', [
+      supplierId,
+      storeId,
+    ]);
+
+    if (!existing) {
+      throw new AppError(404, 'NOT_FOUND', 'Supplier Not Found', 'Supplier account does not exist.');
+    }
+
+    await req.db.execute(
+      `UPDATE suppliers SET
+         name = COALESCE($1, name),
+         gstin = CASE WHEN $2 IS NULL THEN gstin WHEN $2 = '' THEN NULL ELSE $2 END,
+         phone = CASE WHEN $3 IS NULL THEN phone WHEN $3 = '' THEN NULL ELSE $3 END,
+         address = CASE WHEN $4 IS NULL THEN address WHEN $4 = '' THEN NULL ELSE $4 END,
+         credit_period_days = COALESCE($5, credit_period_days)
+       WHERE id = $6 AND store_id = $7`,
+      [
+        body.name ?? null,
+        body.gstin !== undefined ? body.gstin.toUpperCase() : null,
+        body.phone !== undefined ? body.phone : null,
+        body.address !== undefined ? body.address : null,
+        body.creditPeriodDays ?? null,
+        supplierId,
+        storeId,
+      ]
+    );
+
+    const updated = await req.db.queryOne(
+      'SELECT id, name, gstin, phone, address, credit_period_days, is_active FROM suppliers WHERE id = $1',
+      [supplierId]
+    );
+
+    res.json({ success: true, message: 'Supplier updated successfully.', supplier: updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /suppliers/:id/payments (Record supplier payment - PUR-008, ACC-003)
 purchasesRouter.post(['/suppliers/:id/payments', '/:id/payments'], authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
   try {

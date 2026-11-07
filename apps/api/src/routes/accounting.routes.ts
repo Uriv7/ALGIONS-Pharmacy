@@ -200,6 +200,81 @@ accountingRouter.post(['/customers', '/'], authenticateToken, async (req: Reques
   }
 });
 
+// PUT /customers/:id (Carefully guarded customer edit - CUS-001/CUS-003)
+accountingRouter.put(['/customers/:id', '/:id'], authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const customerId = Array.isArray(req.params.id) ? req.params.id[0]! : req.params.id!;
+    const storeId = req.user!.storeId;
+    const body = CustomerSchema.partial().parse(req.body);
+
+    const existing = await req.db.queryOne<{
+      id: string;
+      name: string;
+      phone: string;
+      email: string | null;
+      address: string | null;
+      credit_limit_paise: number;
+      outstanding_balance_paise: number;
+    }>('SELECT id, name, phone, email, address, credit_limit_paise, outstanding_balance_paise FROM customers WHERE id = $1 AND store_id = $2', [
+      customerId,
+      storeId,
+    ]);
+
+    if (!existing) {
+      throw new AppError(404, 'NOT_FOUND', 'Customer Not Found', 'Customer account does not exist.');
+    }
+
+    // Role-based permission enforcement:
+    // Staff can update contact details (phone, email, address, name), but CANNOT increase credit limit > ₹2,000 without Owner authority
+    if (req.user!.accountType !== 'OWNER' && body.creditLimitPaise !== undefined && body.creditLimitPaise > 200000) {
+      throw new AppError(
+        403,
+        'FORBIDDEN',
+        'Owner Authority Required',
+        'Staff members cannot elevate customer credit limit above ₹2,000. Owner authorization required.'
+      );
+    }
+
+    // Credit ceiling check: Cannot set limit lower than already accrued debt
+    if (body.creditLimitPaise !== undefined && body.creditLimitPaise < Number(existing.outstanding_balance_paise)) {
+      throw new AppError(
+        400,
+        'VALIDATION_ERROR',
+        'Credit Limit Inconsistent',
+        `Credit limit cannot be reduced below active outstanding debt balance of ₹${(Number(existing.outstanding_balance_paise) / 100).toFixed(2)}.`
+      );
+    }
+
+    await req.db.execute(
+      `UPDATE customers SET
+         name = COALESCE($1, name),
+         phone = COALESCE($2, phone),
+         email = CASE WHEN $3 IS NULL THEN email WHEN $3 = '' THEN NULL ELSE $3 END,
+         address = CASE WHEN $4 IS NULL THEN address WHEN $4 = '' THEN NULL ELSE $4 END,
+         credit_limit_paise = COALESCE($5, credit_limit_paise)
+       WHERE id = $6 AND store_id = $7`,
+      [
+        body.name ?? null,
+        body.phone ?? null,
+        body.email !== undefined ? body.email : null,
+        body.address !== undefined ? body.address : null,
+        body.creditLimitPaise ?? null,
+        customerId,
+        storeId,
+      ]
+    );
+
+    const updated = await req.db.queryOne(
+      'SELECT id, name, phone, email, address, credit_limit_paise, outstanding_balance_paise, is_active FROM customers WHERE id = $1',
+      [customerId]
+    );
+
+    res.json({ success: true, message: 'Customer updated successfully.', customer: updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /doctors
 accountingRouter.get(['/doctors', '/'], authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
   try {

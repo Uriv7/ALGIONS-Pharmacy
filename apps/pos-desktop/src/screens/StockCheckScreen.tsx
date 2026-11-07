@@ -14,6 +14,8 @@ import {
   ShieldCheck,
   Printer,
   Barcode as BarcodeIcon,
+  Edit2,
+  Lock,
 } from 'lucide-react';
 import { api } from '../api/client.js';
 import { formatPaiseToINR, isBatchNearExpiry, isBatchExpired } from '@algions/domain';
@@ -39,6 +41,43 @@ export const StockCheckScreen: React.FC<StockCheckScreenProps> = ({ user }) => {
   const [auditRackFilter, setAuditRackFilter] = useState('ALL');
   const [finalizingAudit, setFinalizingAudit] = useState(false);
   const [auditSuccessMsg, setAuditSuccessMsg] = useState<string | null>(null);
+
+  // Edit Batch Modal State (INV-004 / INV-011)
+  const [editingBatch, setEditingBatch] = useState<any | null>(null);
+  const [editRackLocation, setEditRackLocation] = useState('');
+  const [editSaleRateRupees, setEditSaleRateRupees] = useState('');
+  const [savingBatch, setSavingBatch] = useState(false);
+  const [batchActionMsg, setBatchActionMsg] = useState<string | null>(null);
+
+  const handleSaveBatch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingBatch) return;
+    setSavingBatch(true);
+    try {
+      const payload: { rackLocation?: string; saleRatePaise?: number } = {
+        rackLocation: editRackLocation.trim() || undefined,
+      };
+
+      if (isOwner && editSaleRateRupees) {
+        const paise = Math.round(parseFloat(editSaleRateRupees) * 100);
+        if (paise > editingBatch.mrpPaise) {
+          alert(`Selling price cannot exceed printed MRP of ₹${(editingBatch.mrpPaise / 100).toFixed(2)}.`);
+          setSavingBatch(false);
+          return;
+        }
+        payload.saleRatePaise = paise;
+      }
+
+      await api.updateBatch(editingBatch.id, payload);
+      setBatchActionMsg(`Batch ${editingBatch.batchNumber} updated successfully.`);
+      setEditingBatch(null);
+      await fetchStockData();
+    } catch (err: any) {
+      alert(err.message || 'Error updating batch');
+    } finally {
+      setSavingBatch(false);
+    }
+  };
 
   const fetchStockData = async () => {
     setLoading(true);
@@ -196,6 +235,16 @@ export const StockCheckScreen: React.FC<StockCheckScreenProps> = ({ user }) => {
         </div>
       </div>
 
+      {/* Alerts */}
+      {batchActionMsg && (
+        <div className="mb-3 p-3 bg-teal-50 border border-teal-200 text-teal-800 text-xs rounded-lg font-semibold flex items-center justify-between">
+          <span>{batchActionMsg}</span>
+          <button onClick={() => setBatchActionMsg(null)} className="text-teal-600 hover:text-teal-900 font-bold">
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* TAB 1: LIVE BATCHES */}
       {activeTab === 'BATCHES' && (
         <div className="flex-1 flex flex-col gap-3 overflow-hidden">
@@ -260,7 +309,7 @@ export const StockCheckScreen: React.FC<StockCheckScreenProps> = ({ user }) => {
                     <th className="py-2.5 px-3 text-right">MRP</th>
                     <th className="py-2.5 px-3 text-right">Sale Rate</th>
                     <th className="py-2.5 px-4 text-center">Available Stock</th>
-                    <th className="py-2.5 px-3 text-center">Barcode</th>
+                    <th className="py-2.5 px-3 text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -312,13 +361,26 @@ export const StockCheckScreen: React.FC<StockCheckScreenProps> = ({ user }) => {
                           {b.quantity} loose
                         </td>
                         <td className="py-2.5 px-3 text-center">
-                          <button
-                            onClick={() => setBarcodePrintProduct(b)}
-                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-teal-50 hover:text-teal-700 text-slate-500 transition"
-                            title="Print Barcode & Shelf Label"
-                          >
-                            <Printer className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() => {
+                                setEditingBatch(b);
+                                setEditRackLocation(b.rackLocation || '');
+                                setEditSaleRateRupees((b.saleRatePaise / 100).toFixed(2));
+                              }}
+                              className="p-1.5 rounded-lg bg-slate-100 hover:bg-teal-50 hover:text-teal-700 text-slate-500 transition"
+                              title="Edit Shelf Location & Price (INV-004)"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => setBarcodePrintProduct(b)}
+                              className="p-1.5 rounded-lg bg-slate-100 hover:bg-teal-50 hover:text-teal-700 text-slate-500 transition"
+                              title="Print Barcode & Shelf Label"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -535,6 +597,103 @@ export const StockCheckScreen: React.FC<StockCheckScreenProps> = ({ user }) => {
           }}
           onClose={() => setBarcodePrintProduct(null)}
         />
+      )}
+
+      {/* Edit Batch Location & Pricing Modal (INV-004 / INV-011) */}
+      {editingBatch && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md border border-slate-200">
+            <h2 className="text-base font-bold text-slate-800 mb-1">Edit Shelf Location & Pricing</h2>
+            <p className="text-xs text-slate-500 mb-4">
+              {editingBatch.brandName} • Batch <span className="font-mono font-bold text-slate-700">{editingBatch.batchNumber}</span>
+            </p>
+
+            <form onSubmit={handleSaveBatch} className="space-y-4">
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-semibold">Printed MRP</span>
+                  <span className="font-bold text-slate-700">{formatPaiseToINR(editingBatch.mrpPaise)}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-semibold">Available Units</span>
+                  <span className="font-bold text-emerald-700">{editingBatch.quantity} loose</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Shelf / Rack Location (INV-004)
+                </label>
+                <input
+                  type="text"
+                  value={editRackLocation}
+                  onChange={(e) => setEditRackLocation(e.target.value)}
+                  placeholder="e.g. Rack A-02, Shelf 3, Cold Storage"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-600"
+                  required
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Shelf position guides billing retrieval and physical cycle counts.
+                </p>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-slate-700 flex items-center gap-1">
+                    Selling Price (₹ per unit)
+                    {!isOwner && <Lock className="w-3 h-3 text-slate-400" />}
+                  </label>
+                  {!isOwner ? (
+                    <span className="text-[10px] text-amber-700 font-semibold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                      Owner Only
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-slate-400">
+                      Ceiling: ₹{(editingBatch.mrpPaise / 100).toFixed(2)}
+                    </span>
+                  )}
+                </div>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  max={(editingBatch.mrpPaise / 100).toFixed(2)}
+                  value={editSaleRateRupees}
+                  disabled={!isOwner}
+                  onChange={(e) => setEditSaleRateRupees(e.target.value)}
+                  className={`w-full px-3 py-2 border rounded-lg text-xs font-bold ${
+                    !isOwner
+                      ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                      : 'border-slate-300 text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-600'
+                  }`}
+                  required
+                />
+                {!isOwner && (
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Staff members cannot alter retail selling rates. Owner login required.
+                  </p>
+                )}
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingBatch(null)}
+                  className="flex-1 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingBatch}
+                  className="flex-1 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-bold shadow transition"
+                >
+                  {savingBatch ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );
