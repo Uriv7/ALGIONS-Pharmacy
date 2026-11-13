@@ -52,3 +52,50 @@ export interface PurchaseInvoiceDTO {
   lines: (PurchaseLine & { id: string })[];
   createdAt: string;
 }
+
+// Purchase Return / Supplier Debit Note (PUR-006 / ACC-007)
+export const PurchaseReturnLineSchema = z.object({
+  batchId: z.string().uuid(),
+  productId: z.string().uuid(),
+  quantityUnits: z.number().int().positive(),
+  returnRatePaise: z.number().int().positive(), // per loose unit
+  taxRatePercent: z.number().default(12),
+  reason: z.string().optional(),
+});
+export type PurchaseReturnLine = z.infer<typeof PurchaseReturnLineSchema>;
+
+export const CreatePurchaseReturnSchema = z.object({
+  supplierId: z.string().uuid(),
+  originalPurchaseInvoiceId: z.string().uuid().optional(),
+  debitNoteNumber: z.string().optional(),
+  reason: z.string().min(3, 'Return reason is required'),
+  lines: z.array(PurchaseReturnLineSchema).min(1, 'At least one return item is required'),
+});
+export type CreatePurchaseReturnRequest = z.infer<typeof CreatePurchaseReturnSchema>;
+
+export interface DebitNoteDTO {
+  id: string;
+  storeId: string;
+  supplierId: string;
+  supplierName?: string;
+  originalPurchaseInvoiceId?: string | null;
+  debitNoteNumber: string;
+  reason: string;
+  totalAmountPaise: number;
+  totalTaxPaise: number;
+  status: 'POSTED' | 'CANCELLED';
+  createdBy: string;
+  createdByName?: string;
+  createdAt: string;
+  lines?: {
+    id: string;
+    productId: string;
+    productName?: string;
+    batchId: string;
+    batchNumber?: string;
+    quantityUnits: number;
+    returnRatePaise: number;
+    taxRatePercent: number;
+    totalPaise: number;
+  }[];
+}

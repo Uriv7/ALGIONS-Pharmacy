@@ -125,12 +125,23 @@ posRouter.post(
             quantity: number;
             expiry_date: string;
             batch_number: string;
-          }>('SELECT id, quantity, expiry_date, batch_number FROM batches WHERE id = $1 FOR UPDATE', [
+            is_recalled?: number | boolean;
+            recall_reason?: string;
+          }>('SELECT id, quantity, expiry_date, batch_number, is_recalled, recall_reason FROM batches WHERE id = $1 FOR UPDATE', [
             line.batchId,
           ]);
 
           if (!batchRow) {
             throw new AppError(404, 'NOT_FOUND', 'Batch Not Found', `Batch ID ${line.batchId} not found.`);
+          }
+
+          if (batchRow.is_recalled) {
+            throw new AppError(
+              400,
+              'BATCH_RECALLED',
+              'Cannot Dispense Recalled Batch',
+              `Batch ${batchRow.batch_number} has been recalled (${batchRow.recall_reason || 'Safety recall notice'}). Dispensing is strictly blocked.`
+            );
           }
 
           if (isBatchExpired(batchRow.expiry_date)) {

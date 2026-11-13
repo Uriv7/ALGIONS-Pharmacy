@@ -427,3 +427,105 @@ ownerRouter.get('/reports/velocity', authenticateToken, requireOwner, async (req
     next(err);
   }
 });
+
+// GET /owner/reports/doctors (RPT-008: Doctor and Product Prescription Volume Report)
+ownerRouter.get('/reports/doctors', authenticateToken, requireOwner, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const storeId = req.user!.storeId;
+    const startDate = (req.query.startDate as string) || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const endDate = (req.query.endDate as string) || new Date().toISOString().slice(0, 10);
+
+    // 1. Doctor prescription summary
+    const doctorRows = await req.db.query<{
+      doctor_id: string;
+      doctor_name: string;
+      reg_number: string | null;
+      specialization: string | null;
+      hospital_clinic: string | null;
+      prescription_count: number;
+      gross_sales_paise: number;
+      discount_paise: number;
+      net_sales_paise: number;
+    }>(
+      `SELECT COALESCE(d.id, 'UNSPECIFIED') as doctor_id,
+              COALESCE(d.name, i.doctor_name, 'Self / Walk-In OTC') as doctor_name,
+              d.reg_number,
+              d.specialization,
+              d.hospital_clinic,
+              COUNT(DISTINCT i.id) as prescription_count,
+              SUM(i.gross_total_paise) as gross_sales_paise,
+              SUM(i.total_discount_paise) as discount_paise,
+              SUM(i.grand_total_paise) as net_sales_paise
+       FROM sales_invoices i
+       LEFT JOIN doctors d ON i.doctor_id = d.id
+       WHERE i.store_id = $1 AND i.status = 'POSTED'
+         AND i.created_at >= $2 AND i.created_at <= $3
+       GROUP BY COALESCE(d.id, 'UNSPECIFIED'), COALESCE(d.name, i.doctor_name, 'Self / Walk-In OTC'),
+                d.reg_number, d.specialization, d.hospital_clinic
+       ORDER BY SUM(i.grand_total_paise) DESC`,
+      [storeId, `${startDate}T00:00:00`, `${endDate}T23:59:59`]
+    );
+
+    // 2. For each doctor, query top prescribed products
+    const doctors = [];
+    let totalPrescriptions = 0;
+    let totalPrescriptionSalesPaise = 0;
+
+    for (const doc of doctorRows.rows) {
+      const pCount = Number(doc.prescription_count || 0);
+      const netSales = Number(doc.net_sales_paise || 0);
+      totalPrescriptions += pCount;
+      totalPrescriptionSalesPaise += netSales;
+
+      const topMedicines = await req.db.query<{
+        product_name: string;
+        units_sold: number;
+        revenue_paise: number;
+      }>(
+        `SELECT l.product_name,
+                SUM(l.quantity) as units_sold,
+                SUM(l.final_line_total_paise) as revenue_paise
+         FROM sales_lines l
+         JOIN sales_invoices i ON l.sales_invoice_id = i.id
+         WHERE i.store_id = $1 AND i.status = 'POSTED'
+           AND i.created_at >= $2 AND i.created_at <= $3
+           AND (${doc.doctor_id === 'UNSPECIFIED' ? 'i.doctor_id IS NULL' : 'i.doctor_id = $4'})
+         GROUP BY l.product_name
+         ORDER BY SUM(l.final_line_total_paise) DESC LIMIT 5`,
+        doc.doctor_id === 'UNSPECIFIED'
+          ? [storeId, `${startDate}T00:00:00`, `${endDate}T23:59:59`]
+          : [storeId, `${startDate}T00:00:00`, `${endDate}T23:59:59`, doc.doctor_id]
+      );
+
+      const totalUnits = topMedicines.rows.reduce((s, m) => s + Number(m.units_sold), 0);
+
+      doctors.push({
+        doctorId: doc.doctor_id,
+        doctorName: doc.doctor_name,
+        regNumber: doc.reg_number,
+        specialization: doc.specialization,
+        hospitalClinic: doc.hospital_clinic,
+        prescriptionCount: pCount,
+        totalUnitsSold: totalUnits,
+        grossSalesPaise: Number(doc.gross_sales_paise || 0),
+        totalDiscountPaise: Number(doc.discount_paise || 0),
+        netSalesPaise: netSales,
+        topMedicines: topMedicines.rows.map((m) => ({
+          productName: m.product_name,
+          unitsSold: Number(m.units_sold),
+          revenuePaise: Number(m.revenue_paise),
+        })),
+      });
+    }
+
+    res.json({
+      startDate,
+      endDate,
+      totalPrescriptions,
+      totalPrescriptionSalesPaise,
+      doctors,
+    });
+  } catch (err) {
+    next(err);
+  }
+});

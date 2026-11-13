@@ -12,7 +12,7 @@ import {
   isBatchNearExpiry,
   getDaysUntilExpiry,
 } from '@algions/domain';
-import { z, UpdateBatchSchema } from '@algions/contracts';
+import { z, UpdateBatchSchema, BatchRecallSchema } from '@algions/contracts';
 
 export const inventoryRouter = Router();
 
@@ -36,10 +36,14 @@ inventoryRouter.get('/batches', authenticateToken, async (req: Request, res: Res
       quantity: number;
       rack_location: string;
       supplier_name: string;
+      supplier_id: string | null;
+      is_recalled: number | boolean;
+      recall_reason: string | null;
     }>(
       `SELECT b.id, b.product_id, p.brand_name, p.generic_name, p.strength,
               b.batch_number, b.expiry_date, b.mrp_paise, b.sale_rate_paise,
-              b.purchase_rate_paise, b.quantity, b.rack_location, s.name as supplier_name
+              b.purchase_rate_paise, b.quantity, b.rack_location, s.name as supplier_name,
+              b.supplier_id, b.is_recalled, b.recall_reason
        FROM batches b
        JOIN products p ON b.product_id = p.id
        LEFT JOIN suppliers s ON b.supplier_id = s.id
@@ -63,12 +67,205 @@ inventoryRouter.get('/batches', authenticateToken, async (req: Request, res: Res
       quantity: Number(b.quantity),
       rackLocation: b.rack_location,
       supplierName: b.supplier_name,
+      supplierId: b.supplier_id,
       isExpired: isBatchExpired(b.expiry_date, now),
       isNearExpiry: isBatchNearExpiry(b.expiry_date, 90, now),
       daysUntilExpiry: getDaysUntilExpiry(b.expiry_date, now),
+      isRecalled: Boolean(b.is_recalled),
+      recallReason: b.recall_reason || null,
     }));
 
     res.json({ batches: rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /stock/batches/:id/recall (INV-012: Mark batch recalled and block sale)
+inventoryRouter.post(
+  '/batches/:id/recall',
+  authenticateToken,
+  requireOwner,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const batchId = Array.isArray(req.params.id) ? req.params.id[0]! : req.params.id!;
+      const storeId = req.user!.storeId;
+      const userId = req.user!.id;
+      const deviceId = req.user!.deviceId;
+      const body = BatchRecallSchema.parse(req.body);
+      const nowIso = new Date().toISOString();
+
+      const batch = await req.db.queryOne<{ id: string; batch_number: string; is_recalled: number | boolean }>(
+        'SELECT id, batch_number, is_recalled FROM batches WHERE id = $1 AND store_id = $2',
+        [batchId, storeId]
+      );
+
+      if (!batch) {
+        throw new AppError(404, 'NOT_FOUND', 'Batch Not Found', 'Batch does not exist.');
+      }
+
+      await req.db.execute(
+        'UPDATE batches SET is_recalled = 1, recall_reason = $1, updated_at = $2 WHERE id = $3 AND store_id = $4',
+        [body.recallReason, nowIso, batchId, storeId]
+      );
+
+      // Audit log entry
+      await req.db.execute(
+        `INSERT INTO audit_logs (
+          id, store_id, user_id, account_type, device_id, action, entity_type,
+          entity_id, reason, prev_hash, current_hash, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+        [
+          generateUUIDv7(),
+          storeId,
+          userId,
+          req.user!.accountType,
+          deviceId,
+          'BATCH_RECALLED',
+          'BATCH',
+          batchId,
+          `Batch ${batch.batch_number} marked RECALLED: ${body.recallReason}`,
+          '0'.repeat(64),
+          generateUUIDv7(),
+          nowIso,
+        ]
+      );
+
+      res.json({
+        success: true,
+        message: `Batch ${batch.batch_number} marked as recalled. POS dispensing is now blocked.`,
+        isRecalled: true,
+        recallReason: body.recallReason,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// POST /stock/batches/:id/unrecall (Clear batch recall)
+inventoryRouter.post(
+  '/batches/:id/unrecall',
+  authenticateToken,
+  requireOwner,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const batchId = Array.isArray(req.params.id) ? req.params.id[0]! : req.params.id!;
+      const storeId = req.user!.storeId;
+      const userId = req.user!.id;
+      const deviceId = req.user!.deviceId;
+      const nowIso = new Date().toISOString();
+
+      const batch = await req.db.queryOne<{ id: string; batch_number: string }>(
+        'SELECT id, batch_number FROM batches WHERE id = $1 AND store_id = $2',
+        [batchId, storeId]
+      );
+
+      if (!batch) {
+        throw new AppError(404, 'NOT_FOUND', 'Batch Not Found', 'Batch does not exist.');
+      }
+
+      await req.db.execute(
+        'UPDATE batches SET is_recalled = 0, recall_reason = NULL, updated_at = $1 WHERE id = $2 AND store_id = $3',
+        [nowIso, batchId, storeId]
+      );
+
+      // Audit log entry
+      await req.db.execute(
+        `INSERT INTO audit_logs (
+          id, store_id, user_id, account_type, device_id, action, entity_type,
+          entity_id, reason, prev_hash, current_hash, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+        [
+          generateUUIDv7(),
+          storeId,
+          userId,
+          req.user!.accountType,
+          deviceId,
+          'BATCH_RECALL_CLEARED',
+          'BATCH',
+          batchId,
+          `Batch ${batch.batch_number} recall restriction cleared.`,
+          '0'.repeat(64),
+          generateUUIDv7(),
+          nowIso,
+        ]
+      );
+
+      res.json({
+        success: true,
+        message: `Recall on batch ${batch.batch_number} has been revoked.`,
+        isRecalled: false,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// GET /stock/batches/:id/recall-impact (INV-012: List impacted sold invoices and patient contact info)
+inventoryRouter.get('/batches/:id/recall-impact', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const batchId = Array.isArray(req.params.id) ? req.params.id[0]! : req.params.id!;
+    const storeId = req.user!.storeId;
+
+    const batch = await req.db.queryOne<{
+      id: string;
+      batch_number: string;
+      brand_name: string;
+      expiry_date: string;
+      quantity: number;
+      is_recalled: number | boolean;
+      recall_reason: string | null;
+      supplier_id: string | null;
+      supplier_name: string | null;
+    }>(
+      `SELECT b.id, b.batch_number, p.brand_name, b.expiry_date, b.quantity,
+              b.is_recalled, b.recall_reason, b.supplier_id, s.name as supplier_name
+       FROM batches b
+       JOIN products p ON b.product_id = p.id
+       LEFT JOIN suppliers s ON b.supplier_id = s.id
+       WHERE b.id = $1 AND b.store_id = $2`,
+      [batchId, storeId]
+    );
+
+    if (!batch) {
+      throw new AppError(404, 'NOT_FOUND', 'Batch Not Found', 'Batch does not exist.');
+    }
+
+    // Query sales lines of posted invoices that dispensed from this batch
+    const sales = await req.db.query(
+      `SELECT i.id as "invoiceId", i.full_invoice_number as "invoiceNumber",
+              i.created_at as "dispensedAt",
+              COALESCE(i.customer_name, 'Walk-In Customer') as "customerName",
+              COALESCE(i.customer_phone, 'Not Provided') as "customerPhone",
+              l.quantity as "unitsSold", u.name as "cashierName"
+       FROM sales_lines l
+       JOIN sales_invoices i ON l.sales_invoice_id = i.id
+       JOIN users u ON i.user_id = u.id
+       WHERE l.batch_id = $1 AND i.store_id = $2 AND i.status != 'VOIDED'
+       ORDER BY i.created_at DESC`,
+      [batchId, storeId]
+    );
+
+    const totalUnitsSold = sales.rows.reduce((sum: number, row: any) => sum + Number(row.unitsSold), 0);
+
+    res.json({
+      batch: {
+        id: batch.id,
+        batchNumber: batch.batch_number,
+        productName: batch.brand_name,
+        expiryDate: batch.expiry_date,
+        currentStock: Number(batch.quantity),
+        isRecalled: Boolean(batch.is_recalled),
+        recallReason: batch.recall_reason,
+        supplierId: batch.supplier_id,
+        supplierName: batch.supplier_name,
+      },
+      totalUnitsSold,
+      totalImpactedInvoices: sales.rows.length,
+      impactedInvoices: sales.rows,
+    });
   } catch (err) {
     next(err);
   }

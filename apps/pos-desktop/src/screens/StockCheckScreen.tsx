@@ -16,6 +16,11 @@ import {
   Barcode as BarcodeIcon,
   Edit2,
   Lock,
+  AlertOctagon,
+  Phone,
+  Users,
+  ShieldAlert,
+  X,
 } from 'lucide-react';
 import { api } from '../api/client.js';
 import { formatPaiseToINR, isBatchNearExpiry, isBatchExpired } from '@algions/domain';
@@ -31,10 +36,17 @@ export const StockCheckScreen: React.FC<StockCheckScreenProps> = ({ user }) => {
   const [activeTab, setActiveTab] = useState<'BATCHES' | 'AUDIT' | 'REORDER'>('BATCHES');
   const [batches, setBatches] = useState<any[]>([]);
   const [reorderItems, setReorderItems] = useState<any[]>([]);
-  const [filterMode, setFilterMode] = useState<'ALL' | 'NEAR_EXPIRY' | 'EXPIRED'>('ALL');
+  const [filterMode, setFilterMode] = useState<'ALL' | 'NEAR_EXPIRY' | 'EXPIRED' | 'RECALLED'>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [barcodePrintProduct, setBarcodePrintProduct] = useState<any | null>(null);
+
+  // Batch Recall & Patient Trace State (INV-012)
+  const [recallingBatch, setRecallingBatch] = useState<any | null>(null);
+  const [recallImpact, setRecallImpact] = useState<any | null>(null);
+  const [loadingRecallImpact, setLoadingRecallImpact] = useState(false);
+  const [recallReasonInput, setRecallReasonInput] = useState('');
+  const [submittingRecall, setSubmittingRecall] = useState(false);
 
   // Stock Audit State (INV-010)
   const [auditCounts, setAuditCounts] = useState<Record<string, number>>({});
@@ -77,6 +89,80 @@ export const StockCheckScreen: React.FC<StockCheckScreenProps> = ({ user }) => {
     } finally {
       setSavingBatch(false);
     }
+  };
+
+  const handleOpenRecallModal = async (batch: any) => {
+    setRecallingBatch(batch);
+    setRecallReasonInput(batch.recallReason || '');
+    setLoadingRecallImpact(true);
+    try {
+      const res = await api.getBatchRecallImpact(batch.id);
+      setRecallImpact(res);
+    } catch (err: any) {
+      console.error(err);
+    } finally {
+      setLoadingRecallImpact(false);
+    }
+  };
+
+  const handleRecallBatch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!recallingBatch || !recallReasonInput.trim()) return;
+    setSubmittingRecall(true);
+    try {
+      await api.recallBatch(recallingBatch.id, recallReasonInput.trim());
+      setBatchActionMsg(`Batch ${recallingBatch.batchNumber} has been marked RECALLED. Sales are blocked.`);
+      await fetchStockData();
+      const res = await api.getBatchRecallImpact(recallingBatch.id);
+      setRecallImpact(res);
+      setRecallingBatch((prev: any) => ({ ...prev, isRecalled: true, recallReason: recallReasonInput.trim() }));
+    } catch (err: any) {
+      alert(err.message || 'Error recalling batch');
+    } finally {
+      setSubmittingRecall(false);
+    }
+  };
+
+  const handleUnrecallBatch = async () => {
+    if (!recallingBatch) return;
+    if (!window.confirm(`Revoke recall on batch ${recallingBatch.batchNumber} and restore sales?`)) return;
+    setSubmittingRecall(true);
+    try {
+      await api.unrecallBatch(recallingBatch.id);
+      setBatchActionMsg(`Recall restriction revoked on batch ${recallingBatch.batchNumber}.`);
+      await fetchStockData();
+      const res = await api.getBatchRecallImpact(recallingBatch.id);
+      setRecallImpact(res);
+      setRecallingBatch((prev: any) => ({ ...prev, isRecalled: false, recallReason: null }));
+    } catch (err: any) {
+      alert(err.message || 'Error clearing recall');
+    } finally {
+      setSubmittingRecall(false);
+    }
+  };
+
+  const handleExportRecallTrace = () => {
+    if (!recallImpact?.impactedInvoices?.length) {
+      alert('No sold invoices found for this batch.');
+      return;
+    }
+    const headers = ['Invoice Number', 'Dispensed Date', 'Customer Name', 'Customer Phone', 'Units Dispensed', 'Cashier'];
+    const rows = recallImpact.impactedInvoices.map((inv: any) => [
+      `"${inv.invoiceNumber}"`,
+      `"${inv.dispensedAt}"`,
+      `"${inv.customerName}"`,
+      `"${inv.customerPhone}"`,
+      inv.unitsSold,
+      `"${inv.cashierName}"`,
+    ]);
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r: any) => r.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `Batch_Recall_Trace_${recallingBatch?.batchNumber}_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const fetchStockData = async () => {
@@ -159,6 +245,7 @@ export const StockCheckScreen: React.FC<StockCheckScreenProps> = ({ user }) => {
 
     if (filterMode === 'NEAR_EXPIRY') return b.isNearExpiry;
     if (filterMode === 'EXPIRED') return b.isExpired;
+    if (filterMode === 'RECALLED') return b.isRecalled;
     return true;
   });
 
@@ -292,6 +379,17 @@ export const StockCheckScreen: React.FC<StockCheckScreenProps> = ({ user }) => {
                 <AlertTriangle className="w-3.5 h-3.5" />
                 <span>Expired</span>
               </button>
+              <button
+                onClick={() => setFilterMode('RECALLED')}
+                className={`px-3 py-1 rounded-md transition flex items-center gap-1 ${
+                  filterMode === 'RECALLED'
+                    ? 'bg-purple-600 text-white shadow'
+                    : 'text-purple-700 hover:text-purple-800'
+                }`}
+              >
+                <AlertOctagon className="w-3.5 h-3.5" />
+                <span>Recalled Batches</span>
+              </button>
             </div>
           </div>
 
@@ -339,7 +437,11 @@ export const StockCheckScreen: React.FC<StockCheckScreenProps> = ({ user }) => {
                           </span>
                         </td>
                         <td className="py-2.5 px-3">
-                          {b.isExpired ? (
+                          {b.isRecalled ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-purple-700 text-white shadow-xs">
+                              <AlertOctagon className="w-3.5 h-3.5" /> RECALLED
+                            </span>
+                          ) : b.isExpired ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-red-100 text-red-700">
                               <AlertTriangle className="w-3.5 h-3.5" /> Expired: {b.expiryDate}
                             </span>
@@ -372,6 +474,17 @@ export const StockCheckScreen: React.FC<StockCheckScreenProps> = ({ user }) => {
                               title="Edit Shelf Location & Price (INV-004)"
                             >
                               <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleOpenRecallModal(b)}
+                              className={`p-1.5 rounded-lg transition ${
+                                b.isRecalled
+                                  ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                                  : 'bg-slate-100 hover:bg-purple-50 hover:text-purple-700 text-slate-500'
+                              }`}
+                              title="Batch Recall & Customer Impact Trace (INV-012)"
+                            >
+                              <AlertOctagon className="w-3.5 h-3.5" />
                             </button>
                             <button
                               onClick={() => setBarcodePrintProduct(b)}
@@ -692,6 +805,204 @@ export const StockCheckScreen: React.FC<StockCheckScreenProps> = ({ user }) => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: BATCH RECALL & PATIENT TRACING (INV-012) */}
+      {recallingBatch && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-4 bg-purple-700 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertOctagon className="w-5 h-5 text-amber-300" />
+                <h3 className="font-bold text-sm">
+                  Batch Recall Management & Customer Trace (INV-012)
+                </h3>
+              </div>
+              <button
+                onClick={() => {
+                  setRecallingBatch(null);
+                  setRecallImpact(null);
+                }}
+                className="text-white/80 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 overflow-y-auto space-y-4 text-xs">
+              {/* Batch Info Card */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">Medicine</span>
+                  <div className="font-bold text-slate-800 text-sm mt-0.5">{recallingBatch.brandName}</div>
+                  <div className="text-[11px] text-slate-500">{recallingBatch.strength}</div>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">Batch Number</span>
+                  <div className="font-mono font-bold text-purple-800 text-sm mt-0.5">{recallingBatch.batchNumber}</div>
+                  <div className="text-[11px] text-slate-500">Exp: {recallingBatch.expiryDate}</div>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">Remaining Stock</span>
+                  <div className="font-black text-slate-900 text-sm mt-0.5">{recallingBatch.quantity} loose units</div>
+                  <div className="text-[11px] text-slate-500">Rack: {recallingBatch.rackLocation || 'Shelf'}</div>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">Recall Status</span>
+                  <div className="mt-0.5">
+                    {recallingBatch.isRecalled ? (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-700 text-white flex items-center gap-1 w-max">
+                        <AlertOctagon className="w-3 h-3" /> RECALLED (SALE BLOCKED)
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                        ACTIVE / SELLABLE
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Recall Action Form / Status */}
+              {recallingBatch.isRecalled ? (
+                <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <span className="text-[11px] font-bold text-purple-900 flex items-center gap-1">
+                      <ShieldAlert className="w-4 h-4 text-purple-700" />
+                      <span>Active Recall Notice</span>
+                    </span>
+                    <p className="text-purple-800 mt-1 font-semibold">{recallingBatch.recallReason || 'Safety alert issued.'}</p>
+                    <p className="text-[10px] text-purple-600 mt-0.5">Dispensing this batch in POS checkout is strictly rejected with 400 BATCH_RECALLED.</p>
+                  </div>
+                  {isOwner && (
+                    <button
+                      onClick={handleUnrecallBatch}
+                      disabled={submittingRecall}
+                      className="px-4 py-2 bg-white border border-purple-300 hover:bg-purple-100 text-purple-800 rounded-lg font-bold text-xs shadow-xs transition"
+                    >
+                      {submittingRecall ? 'Revoking...' : 'Revoke Recall (Restore Sales)'}
+                    </button>
+                  )}
+                </div>
+              ) : isOwner ? (
+                <form onSubmit={handleRecallBatch} className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-2">
+                  <div className="flex items-center gap-1.5 font-bold text-amber-900">
+                    <AlertTriangle className="w-4 h-4 text-amber-600" />
+                    <span>Issue Regulatory / Quality Batch Recall</span>
+                  </div>
+                  <p className="text-amber-800 text-[11px]">
+                    Marking this batch recalled will immediately prevent any counter from dispensing this batch.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      value={recallReasonInput}
+                      onChange={(e) => setRecallReasonInput(e.target.value)}
+                      placeholder="Mandatory recall reason (e.g., CDSCO Quality Alert / Lab Sub-standard Notice)..."
+                      className="flex-1 py-1.5 px-3 bg-white border border-amber-300 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-600"
+                      required
+                    />
+                    <button
+                      type="submit"
+                      disabled={submittingRecall || !recallReasonInput.trim()}
+                      className="px-4 py-1.5 bg-purple-700 hover:bg-purple-800 text-white rounded-lg font-bold text-xs shadow transition disabled:opacity-50"
+                    >
+                      {submittingRecall ? 'Marking...' : 'Mark Recalled & Block Sales'}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-500 text-xs">
+                  Only Store Owners can issue or revoke official batch recall restrictions.
+                </div>
+              )}
+
+              {/* Customer Trace & Impact Report */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden">
+                <div className="p-3 bg-slate-100 border-b border-slate-200 flex items-center justify-between">
+                  <div>
+                    <h4 className="font-bold text-slate-800 flex items-center gap-1.5">
+                      <Users className="w-4 h-4 text-purple-700" />
+                      <span>Dispensed Customer Recall Trace (Mandatory Patient Outreach)</span>
+                    </h4>
+                    <p className="text-[10px] text-slate-500 mt-0.5">
+                      {recallImpact
+                        ? `${recallImpact.totalUnitsSold} units dispensed across ${recallImpact.totalImpactedInvoices} invoices`
+                        : 'Querying patient trace...'}
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={handleExportRecallTrace}
+                    disabled={!recallImpact?.impactedInvoices?.length}
+                    className="px-3 py-1 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded text-xs flex items-center gap-1 shadow-xs disabled:opacity-50"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Export Patient Contact List</span>
+                  </button>
+                </div>
+
+                <div className="max-h-56 overflow-y-auto">
+                  <table className="w-full text-xs text-left">
+                    <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200 sticky top-0">
+                      <tr>
+                        <th className="py-2 px-3">Invoice #</th>
+                        <th className="py-2 px-3">Dispensed Date</th>
+                        <th className="py-2 px-3">Customer Name</th>
+                        <th className="py-2 px-3">Contact Phone</th>
+                        <th className="py-2 px-2 text-center">Units Sold</th>
+                        <th className="py-2 px-3">Cashier</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {loadingRecallImpact ? (
+                        <tr>
+                          <td colSpan={6} className="py-8 text-center text-slate-400">
+                            Loading customer trace records...
+                          </td>
+                        </tr>
+                      ) : !recallImpact?.impactedInvoices?.length ? (
+                        <tr>
+                          <td colSpan={6} className="py-8 text-center text-slate-400">
+                            Zero units have been dispensed from this batch. No customer outreach required.
+                          </td>
+                        </tr>
+                      ) : (
+                        recallImpact.impactedInvoices.map((inv: any, idx: number) => (
+                          <tr key={idx} className="hover:bg-purple-50/50">
+                            <td className="py-2 px-3 font-mono font-bold text-purple-800">{inv.invoiceNumber}</td>
+                            <td className="py-2 px-3 text-slate-600 font-mono text-[11px]">
+                              {inv.dispensedAt.slice(0, 16).replace('T', ' ')}
+                            </td>
+                            <td className="py-2 px-3 font-semibold text-slate-800">{inv.customerName}</td>
+                            <td className="py-2 px-3 font-mono font-bold text-slate-700 flex items-center gap-1">
+                              <Phone className="w-3 h-3 text-teal-600" />
+                              <span>{inv.customerPhone}</span>
+                            </td>
+                            <td className="py-2 px-2 text-center font-bold text-purple-700">{inv.unitsSold}</td>
+                            <td className="py-2 px-3 text-slate-500">{inv.cashierName}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-3 bg-slate-50 border-t border-slate-200 flex justify-end">
+              <button
+                onClick={() => {
+                  setRecallingBatch(null);
+                  setRecallImpact(null);
+                }}
+                className="px-4 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold rounded-lg text-xs"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

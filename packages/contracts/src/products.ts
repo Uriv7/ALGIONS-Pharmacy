@@ -62,6 +62,37 @@ export const UpdateBatchSchema = z.object({
 });
 export type UpdateBatchDTO = z.infer<typeof UpdateBatchSchema>;
 
+export const BatchRecallSchema = z.object({
+  isRecalled: z.boolean().default(true),
+  recallReason: z.string().min(3, 'Mandatory reason for batch recall'),
+});
+export type BatchRecallDTO = z.infer<typeof BatchRecallSchema>;
+
+export interface BatchRecallImpactDTO {
+  batch: {
+    id: string;
+    batchNumber: string;
+    productName: string;
+    expiryDate: string;
+    currentStock: number;
+    isRecalled: boolean;
+    recallReason?: string | null;
+    supplierId?: string | null;
+    supplierName?: string | null;
+  };
+  totalUnitsSold: number;
+  totalImpactedInvoices: number;
+  impactedInvoices: {
+    invoiceId: string;
+    invoiceNumber: string;
+    dispensedAt: string;
+    customerName: string;
+    customerPhone: string;
+    unitsSold: number;
+    cashierName: string;
+  }[];
+}
+
 export interface ProductSearchResult {
   product: ProductDTO;
   totalStockUnits: number;

@@ -108,3 +108,28 @@ export interface DashboardMetricsDTO {
   pendingExceptionsCount: number;
   pendingPurchasesCount: number;
 }
+
+// Doctor Prescription & Volume Report (RPT-008)
+export interface DoctorReportDTO {
+  startDate: string;
+  endDate: string;
+  totalPrescriptions: number;
+  totalPrescriptionSalesPaise: number;
+  doctors: {
+    doctorId: string;
+    doctorName: string;
+    regNumber?: string | null;
+    specialization?: string | null;
+    hospitalClinic?: string | null;
+    prescriptionCount: number;
+    totalUnitsSold: number;
+    grossSalesPaise: number;
+    totalDiscountPaise: number;
+    netSalesPaise: number;
+    topMedicines: {
+      productName: string;
+      unitsSold: number;
+      revenuePaise: number;
+    }[];
+  }[];
+}

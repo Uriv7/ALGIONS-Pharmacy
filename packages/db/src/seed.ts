@@ -341,6 +341,32 @@ export async function runSeed(targetDb?: IDatabase): Promise<void> {
         lines_json TEXT NOT NULL,
         held_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS debit_notes (
+        id TEXT PRIMARY KEY,
+        store_id TEXT NOT NULL,
+        supplier_id TEXT NOT NULL,
+        original_purchase_invoice_id TEXT,
+        debit_note_number TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        total_amount_paise INTEGER NOT NULL,
+        total_tax_paise INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'POSTED',
+        created_by TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS debit_note_lines (
+        id TEXT PRIMARY KEY,
+        debit_note_id TEXT NOT NULL,
+        product_id TEXT NOT NULL,
+        batch_id TEXT NOT NULL,
+        quantity_units INTEGER NOT NULL,
+        return_rate_paise INTEGER NOT NULL,
+        tax_rate_percent REAL NOT NULL DEFAULT 12.00,
+        total_paise INTEGER NOT NULL,
+        created_at TEXT NOT NULL
+    );
     `;
     const statements = schemaSql.split(';');
     for (const stmt of statements) {
@@ -349,6 +375,40 @@ export async function runSeed(targetDb?: IDatabase): Promise<void> {
       }
     }
   }
+
+  // Safe schema evolutions for existing databases
+  try {
+    await db.execute('ALTER TABLE batches ADD COLUMN is_recalled INTEGER NOT NULL DEFAULT 0');
+  } catch {}
+  try {
+    await db.execute('ALTER TABLE batches ADD COLUMN recall_reason TEXT');
+  } catch {}
+  try {
+    await db.execute(`CREATE TABLE IF NOT EXISTS debit_notes (
+        id TEXT PRIMARY KEY,
+        store_id TEXT NOT NULL,
+        supplier_id TEXT NOT NULL,
+        original_purchase_invoice_id TEXT,
+        debit_note_number TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        total_amount_paise INTEGER NOT NULL,
+        total_tax_paise INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'POSTED',
+        created_by TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    )`);
+    await db.execute(`CREATE TABLE IF NOT EXISTS debit_note_lines (
+        id TEXT PRIMARY KEY,
+        debit_note_id TEXT NOT NULL,
+        product_id TEXT NOT NULL,
+        batch_id TEXT NOT NULL,
+        quantity_units INTEGER NOT NULL,
+        return_rate_paise INTEGER NOT NULL,
+        tax_rate_percent REAL NOT NULL DEFAULT 12.00,
+        total_paise INTEGER NOT NULL,
+        created_at TEXT NOT NULL
+    )`);
+  } catch {}
 
   // Check if already seeded
   const storeCheck = await db.queryOne<{ id: string }>('SELECT id FROM stores LIMIT 1');

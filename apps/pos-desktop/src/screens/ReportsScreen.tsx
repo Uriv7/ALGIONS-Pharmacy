@@ -10,6 +10,7 @@ import {
   Package,
   Layers,
   ArrowUpRight,
+  Stethoscope,
 } from 'lucide-react';
 import { formatPaiseToINR } from '@algions/domain';
 import { api } from '../api/client.js';
@@ -18,7 +19,8 @@ export const ReportsScreen: React.FC = () => {
   const [rangePreset, setRangePreset] = useState<'TODAY' | '7D' | '30D'>('30D');
   const [salesReport, setSalesReport] = useState<any | null>(null);
   const [velocityReport, setVelocityReport] = useState<any | null>(null);
-  const [activeTab, setActiveTab] = useState<'ITEMS' | 'CASHIERS' | 'VELOCITY'>('ITEMS');
+  const [doctorReport, setDoctorReport] = useState<any | null>(null);
+  const [activeTab, setActiveTab] = useState<'ITEMS' | 'CASHIERS' | 'VELOCITY' | 'DOCTORS'>('ITEMS');
   const [loading, setLoading] = useState(true);
 
   const fetchReports = async () => {
@@ -31,12 +33,14 @@ export const ReportsScreen: React.FC = () => {
       const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
       const endDate = new Date().toISOString().slice(0, 10);
 
-      const [sRes, vRes] = await Promise.all([
+      const [sRes, vRes, dRes] = await Promise.all([
         api.getSalesReport(startDate, endDate),
         api.getVelocityReport(),
+        api.getDoctorReport(startDate, endDate).catch(() => null),
       ]);
       setSalesReport(sRes);
       setVelocityReport(vRes);
+      setDoctorReport(dRes);
     } catch (err) {
       console.error(err);
     } finally {
@@ -49,6 +53,32 @@ export const ReportsScreen: React.FC = () => {
   }, [rangePreset]);
 
   const handleExportCSV = () => {
+    if (activeTab === 'DOCTORS') {
+      if (!doctorReport?.doctors?.length) {
+        alert('No doctor data available to export.');
+        return;
+      }
+      const headers = ['Doctor Name', 'Reg Number', 'Hospital/Clinic', 'Prescription Count', 'Gross Sales (INR)', 'Discount (INR)', 'Net Sales (INR)'];
+      const rows = doctorReport.doctors.map((d: any) => [
+        `"${d.doctorName}"`,
+        `"${d.regNumber || '—'}"`,
+        `"${d.hospitalClinic || '—'}"`,
+        d.prescriptionCount,
+        (d.grossSalesPaise / 100).toFixed(2),
+        (d.totalDiscountPaise / 100).toFixed(2),
+        (d.netSalesPaise / 100).toFixed(2),
+      ]);
+      const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r: any) => r.join(','))].join('\n');
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement('a');
+      link.setAttribute('href', encodedUri);
+      link.setAttribute('download', `ALGIONS_Doctor_Report_${new Date().toISOString().slice(0, 10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      return;
+    }
+
     if (!salesReport?.itemSales?.length) {
       alert('No sales data available to export.');
       return;
@@ -213,6 +243,18 @@ export const ReportsScreen: React.FC = () => {
           <TrendingUp className="w-3.5 h-3.5" />
           <span>Fast vs Slow Moving (EXP-006)</span>
         </button>
+
+        <button
+          onClick={() => setActiveTab('DOCTORS')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-sm ${
+            activeTab === 'DOCTORS'
+              ? 'bg-teal-600 text-white'
+              : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+          }`}
+        >
+          <Stethoscope className="w-3.5 h-3.5" />
+          <span>Doctor Prescriptions (RPT-008)</span>
+        </button>
       </div>
 
       {/* Tab 1: Item Sales Table */}
@@ -259,6 +301,88 @@ export const ReportsScreen: React.FC = () => {
         </div>
       )}
 
+      {/* Tab 4: Doctor Prescriptions Breakdown (RPT-008) */}
+      {activeTab === 'DOCTORS' && (
+        <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+          <div className="p-3 bg-teal-50 border-b border-teal-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2">
+              <Stethoscope className="w-4 h-4 text-teal-700" />
+              <span className="font-bold text-teal-900">
+                Doctor Prescription Analytics & Top Dispensed Medicines (RPT-008)
+              </span>
+            </div>
+            <span className="font-black text-teal-800">
+              Total: {doctorReport?.totalPrescriptions || 0} Prescriptions ({formatPaiseToINR(doctorReport?.totalPrescriptionSalesPaise || 0)})
+            </span>
+          </div>
+
+          <div className="overflow-x-auto overflow-y-auto flex-1">
+            <table className="w-full min-w-[750px] text-xs text-left">
+              <thead className="bg-slate-100 text-slate-600 font-semibold border-b border-slate-200 sticky top-0 z-10">
+                <tr>
+                  <th className="py-2.5 px-4">Doctor Name</th>
+                  <th className="py-2.5 px-3">Reg No / Clinic</th>
+                  <th className="py-2.5 px-3 text-center">Prescriptions</th>
+                  <th className="py-2.5 px-3 text-center">Units Sold</th>
+                  <th className="py-2.5 px-3 text-right">Gross Sales</th>
+                  <th className="py-2.5 px-3 text-right">Discounts</th>
+                  <th className="py-2.5 px-4 text-right">Net Revenue</th>
+                  <th className="py-2.5 px-4">Top Prescribed Medicines</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {!doctorReport?.doctors?.length ? (
+                  <tr>
+                    <td colSpan={8} className="py-12 text-center text-slate-400">
+                      No prescription data available for selected period.
+                    </td>
+                  </tr>
+                ) : (
+                  doctorReport.doctors.map((doc: any, idx: number) => (
+                    <tr key={idx} className="hover:bg-slate-50 transition">
+                      <td className="py-3 px-4 font-bold text-slate-800">
+                        {doc.doctorName}
+                      </td>
+                      <td className="py-3 px-3 text-slate-500">
+                        <div>{doc.regNumber ? `Reg: ${doc.regNumber}` : '—'}</div>
+                        <div className="text-[10px] text-slate-400">{doc.hospitalClinic || doc.specialization || ''}</div>
+                      </td>
+                      <td className="py-3 px-3 text-center font-bold text-teal-700">
+                        {doc.prescriptionCount}
+                      </td>
+                      <td className="py-3 px-3 text-center font-semibold text-slate-700">
+                        {doc.totalUnitsSold}
+                      </td>
+                      <td className="py-3 px-3 text-right tabular-nums text-slate-600">
+                        {formatPaiseToINR(doc.grossSalesPaise)}
+                      </td>
+                      <td className="py-3 px-3 text-right tabular-nums text-amber-700">
+                        {formatPaiseToINR(doc.totalDiscountPaise)}
+                      </td>
+                      <td className="py-3 px-4 text-right tabular-nums font-black text-slate-900 text-sm">
+                        {formatPaiseToINR(doc.netSalesPaise)}
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex flex-wrap gap-1 max-w-xs">
+                          {doc.topMedicines?.map((m: any, mIdx: number) => (
+                            <span
+                              key={mIdx}
+                              className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-medium text-[10px]"
+                            >
+                              {m.productName} ({m.unitsSold})
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Tab 2: Cashier Table */}
       {activeTab === 'CASHIERS' && (
         <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
@@ -289,6 +413,88 @@ export const ReportsScreen: React.FC = () => {
                       </td>
                       <td className="py-3 px-4 text-right tabular-nums font-black text-slate-900 text-sm">
                         {formatPaiseToINR(c.totalSalesPaise)}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 4: Doctor Prescriptions Breakdown (RPT-008) */}
+      {activeTab === 'DOCTORS' && (
+        <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+          <div className="p-3 bg-teal-50 border-b border-teal-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2">
+              <Stethoscope className="w-4 h-4 text-teal-700" />
+              <span className="font-bold text-teal-900">
+                Doctor Prescription Analytics & Top Dispensed Medicines (RPT-008)
+              </span>
+            </div>
+            <span className="font-black text-teal-800">
+              Total: {doctorReport?.totalPrescriptions || 0} Prescriptions ({formatPaiseToINR(doctorReport?.totalPrescriptionSalesPaise || 0)})
+            </span>
+          </div>
+
+          <div className="overflow-x-auto overflow-y-auto flex-1">
+            <table className="w-full min-w-[750px] text-xs text-left">
+              <thead className="bg-slate-100 text-slate-600 font-semibold border-b border-slate-200 sticky top-0 z-10">
+                <tr>
+                  <th className="py-2.5 px-4">Doctor Name</th>
+                  <th className="py-2.5 px-3">Reg No / Clinic</th>
+                  <th className="py-2.5 px-3 text-center">Prescriptions</th>
+                  <th className="py-2.5 px-3 text-center">Units Sold</th>
+                  <th className="py-2.5 px-3 text-right">Gross Sales</th>
+                  <th className="py-2.5 px-3 text-right">Discounts</th>
+                  <th className="py-2.5 px-4 text-right">Net Revenue</th>
+                  <th className="py-2.5 px-4">Top Prescribed Medicines</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {!doctorReport?.doctors?.length ? (
+                  <tr>
+                    <td colSpan={8} className="py-12 text-center text-slate-400">
+                      No prescription data available for selected period.
+                    </td>
+                  </tr>
+                ) : (
+                  doctorReport.doctors.map((doc: any, idx: number) => (
+                    <tr key={idx} className="hover:bg-slate-50 transition">
+                      <td className="py-3 px-4 font-bold text-slate-800">
+                        {doc.doctorName}
+                      </td>
+                      <td className="py-3 px-3 text-slate-500">
+                        <div>{doc.regNumber ? `Reg: ${doc.regNumber}` : '—'}</div>
+                        <div className="text-[10px] text-slate-400">{doc.hospitalClinic || doc.specialization || ''}</div>
+                      </td>
+                      <td className="py-3 px-3 text-center font-bold text-teal-700">
+                        {doc.prescriptionCount}
+                      </td>
+                      <td className="py-3 px-3 text-center font-semibold text-slate-700">
+                        {doc.totalUnitsSold}
+                      </td>
+                      <td className="py-3 px-3 text-right tabular-nums text-slate-600">
+                        {formatPaiseToINR(doc.grossSalesPaise)}
+                      </td>
+                      <td className="py-3 px-3 text-right tabular-nums text-amber-700">
+                        {formatPaiseToINR(doc.totalDiscountPaise)}
+                      </td>
+                      <td className="py-3 px-4 text-right tabular-nums font-black text-slate-900 text-sm">
+                        {formatPaiseToINR(doc.netSalesPaise)}
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex flex-wrap gap-1 max-w-xs">
+                          {doc.topMedicines?.map((m: any, mIdx: number) => (
+                            <span
+                              key={mIdx}
+                              className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-medium text-[10px]"
+                            >
+                              {m.productName} ({m.unitsSold})
+                            </span>
+                          ))}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -352,6 +558,88 @@ export const ReportsScreen: React.FC = () => {
                 ))
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 4: Doctor Prescriptions Breakdown (RPT-008) */}
+      {activeTab === 'DOCTORS' && (
+        <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+          <div className="p-3 bg-teal-50 border-b border-teal-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2">
+              <Stethoscope className="w-4 h-4 text-teal-700" />
+              <span className="font-bold text-teal-900">
+                Doctor Prescription Analytics & Top Dispensed Medicines (RPT-008)
+              </span>
+            </div>
+            <span className="font-black text-teal-800">
+              Total: {doctorReport?.totalPrescriptions || 0} Prescriptions ({formatPaiseToINR(doctorReport?.totalPrescriptionSalesPaise || 0)})
+            </span>
+          </div>
+
+          <div className="overflow-x-auto overflow-y-auto flex-1">
+            <table className="w-full min-w-[750px] text-xs text-left">
+              <thead className="bg-slate-100 text-slate-600 font-semibold border-b border-slate-200 sticky top-0 z-10">
+                <tr>
+                  <th className="py-2.5 px-4">Doctor Name</th>
+                  <th className="py-2.5 px-3">Reg No / Clinic</th>
+                  <th className="py-2.5 px-3 text-center">Prescriptions</th>
+                  <th className="py-2.5 px-3 text-center">Units Sold</th>
+                  <th className="py-2.5 px-3 text-right">Gross Sales</th>
+                  <th className="py-2.5 px-3 text-right">Discounts</th>
+                  <th className="py-2.5 px-4 text-right">Net Revenue</th>
+                  <th className="py-2.5 px-4">Top Prescribed Medicines</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {!doctorReport?.doctors?.length ? (
+                  <tr>
+                    <td colSpan={8} className="py-12 text-center text-slate-400">
+                      No prescription data available for selected period.
+                    </td>
+                  </tr>
+                ) : (
+                  doctorReport.doctors.map((doc: any, idx: number) => (
+                    <tr key={idx} className="hover:bg-slate-50 transition">
+                      <td className="py-3 px-4 font-bold text-slate-800">
+                        {doc.doctorName}
+                      </td>
+                      <td className="py-3 px-3 text-slate-500">
+                        <div>{doc.regNumber ? `Reg: ${doc.regNumber}` : '—'}</div>
+                        <div className="text-[10px] text-slate-400">{doc.hospitalClinic || doc.specialization || ''}</div>
+                      </td>
+                      <td className="py-3 px-3 text-center font-bold text-teal-700">
+                        {doc.prescriptionCount}
+                      </td>
+                      <td className="py-3 px-3 text-center font-semibold text-slate-700">
+                        {doc.totalUnitsSold}
+                      </td>
+                      <td className="py-3 px-3 text-right tabular-nums text-slate-600">
+                        {formatPaiseToINR(doc.grossSalesPaise)}
+                      </td>
+                      <td className="py-3 px-3 text-right tabular-nums text-amber-700">
+                        {formatPaiseToINR(doc.totalDiscountPaise)}
+                      </td>
+                      <td className="py-3 px-4 text-right tabular-nums font-black text-slate-900 text-sm">
+                        {formatPaiseToINR(doc.netSalesPaise)}
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex flex-wrap gap-1 max-w-xs">
+                          {doc.topMedicines?.map((m: any, mIdx: number) => (
+                            <span
+                              key={mIdx}
+                              className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-medium text-[10px]"
+                            >
+                              {m.productName} ({m.unitsSold})
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

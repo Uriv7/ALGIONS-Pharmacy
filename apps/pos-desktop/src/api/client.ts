@@ -500,6 +500,62 @@ export class ApiClient {
   async getExpiryClearanceHints(): Promise<any> {
     return this.request<any>('/inventory/expiry-clearance-hints');
   }
+
+  // PUR-006 / ACC-007: Purchase Returns & Debit Notes
+  async createPurchaseReturn(payload: {
+    supplierId: string;
+    reason: string;
+    debitNoteNumber?: string;
+    originalPurchaseInvoiceId?: string;
+    lines: {
+      batchId: string;
+      productId: string;
+      quantityUnits: number;
+      returnRatePaise: number;
+      taxRatePercent?: number;
+      reason?: string;
+    }[];
+  }): Promise<any> {
+    return this.request<any>('/purchases/returns', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getPurchaseReturns(): Promise<{ debitNotes: any[] }> {
+    return this.request<{ debitNotes: any[] }>('/purchases/returns');
+  }
+
+  async getPurchaseReturn(id: string): Promise<{ debitNote: any }> {
+    return this.request<{ debitNote: any }>(`/purchases/returns/${id}`);
+  }
+
+  // INV-012: Batch Recall & Impact Tracing
+  async recallBatch(batchId: string, recallReason: string): Promise<any> {
+    return this.request<any>(`/stock/batches/${batchId}/recall`, {
+      method: 'POST',
+      body: JSON.stringify({ recallReason }),
+    });
+  }
+
+  async unrecallBatch(batchId: string): Promise<any> {
+    return this.request<any>(`/stock/batches/${batchId}/unrecall`, {
+      method: 'POST',
+    });
+  }
+
+  async getBatchRecallImpact(batchId: string): Promise<any> {
+    return this.request<any>(`/stock/batches/${batchId}/recall-impact`);
+  }
+
+  // RPT-008: Doctor Prescription & Product Volume Report
+  async getDoctorReport(startDate?: string, endDate?: string): Promise<any> {
+    const params = new URLSearchParams();
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return this.request<any>(`/owner/reports/doctors${qs}`);
+  }
 }
 
 export const api = new ApiClient();

@@ -114,6 +114,8 @@ CREATE TABLE IF NOT EXISTS batches (
     quantity INTEGER NOT NULL DEFAULT 0, -- Cached derived balance
     supplier_id VARCHAR(36) REFERENCES suppliers(id),
     rack_location VARCHAR(100),
+    is_recalled BOOLEAN NOT NULL DEFAULT FALSE,
+    recall_reason TEXT,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT unique_store_product_batch UNIQUE (store_id, product_id, batch_number, expiry_date, mrp_paise)
@@ -357,4 +359,31 @@ CREATE TABLE IF NOT EXISTS held_bills (
     customer_phone VARCHAR(20),
     lines_json JSONB NOT NULL,
     held_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 15. Purchase Returns & Debit Notes (PUR-006 / ACC-007)
+CREATE TABLE IF NOT EXISTS debit_notes (
+    id VARCHAR(36) PRIMARY KEY,
+    store_id VARCHAR(36) NOT NULL REFERENCES stores(id),
+    supplier_id VARCHAR(36) NOT NULL REFERENCES suppliers(id),
+    original_purchase_invoice_id VARCHAR(36) REFERENCES purchase_invoices(id),
+    debit_note_number VARCHAR(100) NOT NULL,
+    reason TEXT NOT NULL,
+    total_amount_paise BIGINT NOT NULL,
+    total_tax_paise BIGINT NOT NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'POSTED' CHECK (status IN ('POSTED', 'CANCELLED')),
+    created_by VARCHAR(36) NOT NULL REFERENCES users(id),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS debit_note_lines (
+    id VARCHAR(36) PRIMARY KEY,
+    debit_note_id VARCHAR(36) NOT NULL REFERENCES debit_notes(id),
+    product_id VARCHAR(36) NOT NULL REFERENCES products(id),
+    batch_id VARCHAR(36) NOT NULL REFERENCES batches(id),
+    quantity_units INTEGER NOT NULL,
+    return_rate_paise BIGINT NOT NULL,
+    tax_rate_percent NUMERIC(5,2) NOT NULL DEFAULT 12.00,
+    total_paise BIGINT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

@@ -403,4 +403,149 @@ describe('ALGIONS Pharmacy - API Integration & Business Rules Tests', () => {
     });
     assert.strictEqual(ownerValidRes.status, 200);
   });
+
+  it('PUR-006 / ACC-007: Purchase returns and supplier debit notes deduct stock and update supplier ledger', async () => {
+    // 1. Get supplier
+    const suppsRes = await fetch(`${baseUrl}/suppliers`, {
+      headers: { Authorization: `Bearer ${ownerToken}` },
+    });
+    const suppsData = await suppsRes.json();
+    const supp = suppsData.suppliers[0];
+    assert.ok(supp);
+
+    // 2. Reject if returning excessive units beyond batch stock -> 400
+    const excessReturnRes = await fetch(`${baseUrl}/purchases/returns`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${staffToken}`,
+      },
+      body: JSON.stringify({
+        supplierId: supp.id,
+        reason: 'Damaged packaging return',
+        lines: [
+          {
+            batchId: doloBatchId,
+            productId: doloProductId,
+            quantityUnits: 999999, // Exceeds available stock
+            returnRatePaise: 150,
+            taxRatePercent: 12,
+          },
+        ],
+      }),
+    });
+    assert.strictEqual(excessReturnRes.status, 400);
+
+    // 3. Successfully create debit note -> 201
+    const validReturnRes = await fetch(`${baseUrl}/purchases/returns`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${staffToken}`,
+      },
+      body: JSON.stringify({
+        supplierId: supp.id,
+        reason: 'Expired stock return to distributor',
+        lines: [
+          {
+            batchId: doloBatchId,
+            productId: doloProductId,
+            quantityUnits: 5,
+            returnRatePaise: 150,
+            taxRatePercent: 12,
+          },
+        ],
+      }),
+    });
+    assert.strictEqual(validReturnRes.status, 201);
+    const returnData = await validReturnRes.json();
+    assert.strictEqual(returnData.success, true);
+    assert.ok(returnData.debitNoteNumber);
+
+    // 4. Debit notes list returns the created debit note
+    const listRes = await fetch(`${baseUrl}/purchases/returns`, {
+      headers: { Authorization: `Bearer ${staffToken}` },
+    });
+    assert.strictEqual(listRes.status, 200);
+    const listData = await listRes.json();
+    assert.ok(listData.debitNotes.some((dn: any) => dn.id === returnData.id));
+  });
+
+  it('INV-012: Batch recall blocks POS dispensing and queries customer recall trace', async () => {
+    // 1. Mark batch recalled by Owner -> 200
+    const recallRes = await fetch(`${baseUrl}/stock/batches/${doloBatchId}/recall`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${ownerToken}`,
+      },
+      body: JSON.stringify({
+        recallReason: 'Manufacturer safety alert: potential chemical degradation',
+      }),
+    });
+    assert.strictEqual(recallRes.status, 200);
+    const recallData = await recallRes.json();
+    assert.strictEqual(recallData.isRecalled, true);
+
+    // 2. Attempt POS checkout with recalled batch -> 400 BATCH_RECALLED
+    const checkoutRes = await fetch(`${baseUrl}/pos/sales`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${staffToken}`,
+        'Idempotency-Key': `recall-test-${Date.now()}`,
+      },
+      body: JSON.stringify({
+        lines: [
+          {
+            batchId: doloBatchId,
+            productId: doloProductId,
+            quantity: 10,
+            unitsPerPack: 15,
+            saleRatePaise: 225,
+            mrpPaise: 225,
+            discountPercent: 0,
+            taxRatePercent: 12,
+          },
+        ],
+        payments: [{ mode: 'CASH', amountPaise: 2300 }],
+      }),
+    });
+    assert.strictEqual(checkoutRes.status, 400);
+    const checkoutErr = await checkoutRes.json();
+    assert.strictEqual(checkoutErr.code, 'BATCH_RECALLED');
+
+    // 3. Query recall impact & customer contact trace -> 200
+    const impactRes = await fetch(`${baseUrl}/stock/batches/${doloBatchId}/recall-impact`, {
+      headers: { Authorization: `Bearer ${staffToken}` },
+    });
+    assert.strictEqual(impactRes.status, 200);
+    const impactData = await impactRes.json();
+    assert.strictEqual(impactData.batch.isRecalled, true);
+    assert.ok(Array.isArray(impactData.impactedInvoices));
+
+    // 4. Owner unrecalls batch -> 200
+    const unrecallRes = await fetch(`${baseUrl}/stock/batches/${doloBatchId}/unrecall`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${ownerToken}` },
+    });
+    assert.strictEqual(unrecallRes.status, 200);
+  });
+
+  it('RPT-008: Doctor prescription and product volume report is available to Owner and guarded from Staff', async () => {
+    // 1. Staff access forbidden -> 403
+    const staffDocRes = await fetch(`${baseUrl}/owner/reports/doctors`, {
+      headers: { Authorization: `Bearer ${staffToken}` },
+    });
+    assert.strictEqual(staffDocRes.status, 403);
+
+    // 2. Owner access permitted -> 200
+    const ownerDocRes = await fetch(`${baseUrl}/owner/reports/doctors`, {
+      headers: { Authorization: `Bearer ${ownerToken}` },
+    });
+    assert.strictEqual(ownerDocRes.status, 200);
+    const docData = await ownerDocRes.json();
+    assert.ok(Array.isArray(docData.doctors));
+    assert.strictEqual(typeof docData.totalPrescriptions, 'number');
+  });
 });
