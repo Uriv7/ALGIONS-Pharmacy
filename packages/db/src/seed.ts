@@ -8,9 +8,8 @@ export async function runSeed(targetDb?: IDatabase): Promise<void> {
   const db = targetDb || createDatabaseClient();
   console.log('Seeding ALGIONS Pharmacy Database...');
 
-  // If SQLite, run schema setup
-  if (!db.isPostgres()) {
-    const schemaSql = `
+  // Ensure schema tables exist (supports SQLite and PostgreSQL)
+  const schemaSql = `
     CREATE TABLE IF NOT EXISTS stores (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -374,14 +373,17 @@ export async function runSeed(targetDb?: IDatabase): Promise<void> {
         await db.execute(stmt);
       }
     }
-  }
 
   // Safe schema evolutions for existing databases
   try {
-    await db.execute('ALTER TABLE batches ADD COLUMN is_recalled INTEGER NOT NULL DEFAULT 0');
+    const isPg = db.isPostgres();
+    const ifNotExists = isPg ? 'IF NOT EXISTS ' : '';
+    await db.execute(`ALTER TABLE batches ADD COLUMN ${ifNotExists}is_recalled INTEGER NOT NULL DEFAULT 0`);
   } catch {}
   try {
-    await db.execute('ALTER TABLE batches ADD COLUMN recall_reason TEXT');
+    const isPg = db.isPostgres();
+    const ifNotExists = isPg ? 'IF NOT EXISTS ' : '';
+    await db.execute(`ALTER TABLE batches ADD COLUMN ${ifNotExists}recall_reason TEXT`);
   } catch {}
   try {
     await db.execute(`CREATE TABLE IF NOT EXISTS debit_notes (
