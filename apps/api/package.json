@@ -7,7 +7,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "dev": "node --watch dist/server.js",
-    "test": "node --test dist/**/*.test.js 2>/dev/null || tsc && node --test dist/**/*.test.js"
+    "test": "node --test dist/**/*.test.js"
   },
   "dependencies": {
     "@algions/contracts": "workspace:*",

@@ -53,7 +53,7 @@ describe('ALGIONS Pharmacy - API Integration & Business Rules Tests', () => {
   it('GET /health returns healthy system status', async () => {
     const res = await fetch(`${baseUrl}/health`);
     assert.strictEqual(res.status, 200);
-    const data = await res.json();
+    const data: any = await res.json();
     assert.strictEqual(data.status, 'ok');
     assert.strictEqual(data.activeMode, 'ONLINE');
   });
@@ -69,7 +69,7 @@ describe('ALGIONS Pharmacy - API Integration & Business Rules Tests', () => {
       }),
     });
     assert.strictEqual(res.status, 200);
-    const data = await res.json();
+    const data: any = await res.json();
     assert.ok(data.accessToken);
     assert.strictEqual(data.user.accountType, 'STAFF');
     staffToken = data.accessToken;
@@ -86,7 +86,7 @@ describe('ALGIONS Pharmacy - API Integration & Business Rules Tests', () => {
       }),
     });
     assert.strictEqual(res.status, 200);
-    const data = await res.json();
+    const data: any = await res.json();
     assert.strictEqual(data.requiresMfa, true);
     assert.ok(data.tempToken);
 
@@ -101,7 +101,7 @@ describe('ALGIONS Pharmacy - API Integration & Business Rules Tests', () => {
       }),
     });
     assert.strictEqual(mfaRes.status, 200);
-    const mfaData = await mfaRes.json();
+    const mfaData: any = await mfaRes.json();
     assert.ok(mfaData.accessToken);
     assert.strictEqual(mfaData.user.accountType, 'OWNER');
     ownerToken = mfaData.accessToken;
@@ -118,7 +118,7 @@ describe('ALGIONS Pharmacy - API Integration & Business Rules Tests', () => {
       }),
     });
     assert.strictEqual(res.status, 200);
-    const data = await res.json();
+    const data: any = await res.json();
     assert.strictEqual(data.acknowledged, true);
     assert.strictEqual(data.isPrimary, true);
   });
@@ -128,7 +128,7 @@ describe('ALGIONS Pharmacy - API Integration & Business Rules Tests', () => {
       headers: { Authorization: `Bearer ${staffToken}` },
     });
     assert.strictEqual(res.status, 200);
-    const data = await res.json();
+    const data: any = await res.json();
     assert.ok(data.results.length >= 1);
     const dolo = data.results.find((r: any) => r.product.brandName === 'Dolo 650');
     assert.ok(dolo);
@@ -170,7 +170,7 @@ describe('ALGIONS Pharmacy - API Integration & Business Rules Tests', () => {
     });
 
     assert.strictEqual(res.status, 201);
-    const invoice = await res.json();
+    const invoice: any = await res.json();
     assert.ok(invoice.id);
     assert.ok(invoice.fullInvoiceNumber.startsWith('ON/26-27/'));
     assert.strictEqual(invoice.grandTotalPaise, 2300);
@@ -187,7 +187,7 @@ describe('ALGIONS Pharmacy - API Integration & Business Rules Tests', () => {
       body: JSON.stringify(salePayload),
     });
     assert.strictEqual(replayRes.status, 200);
-    const replayInvoice = await replayRes.json();
+    const replayInvoice: any = await replayRes.json();
     assert.strictEqual(replayInvoice.id, invoice.id);
     assert.strictEqual(replayInvoice.fullInvoiceNumber, invoice.fullInvoiceNumber);
   });
@@ -218,7 +218,7 @@ describe('ALGIONS Pharmacy - API Integration & Business Rules Tests', () => {
     });
 
     assert.strictEqual(res.status, 400);
-    const err = await res.json();
+    const err: any = await res.json();
     assert.strictEqual(err.code, 'BATCH_EXPIRED');
   });
 
@@ -248,7 +248,7 @@ describe('ALGIONS Pharmacy - API Integration & Business Rules Tests', () => {
     });
 
     assert.strictEqual(res.status, 409);
-    const err = await res.json();
+    const err: any = await res.json();
     assert.strictEqual(err.code, 'INSUFFICIENT_STOCK');
   });
 
@@ -262,7 +262,7 @@ describe('ALGIONS Pharmacy - API Integration & Business Rules Tests', () => {
       headers: { Authorization: `Bearer ${staffToken}` },
     });
     assert.strictEqual(staffRes.status, 403);
-    const staffErr = await staffRes.json();
+    const staffErr: any = await staffRes.json();
     assert.strictEqual(staffErr.code, 'FORBIDDEN');
 
     // Owner access allowed
@@ -270,7 +270,7 @@ describe('ALGIONS Pharmacy - API Integration & Business Rules Tests', () => {
       headers: { Authorization: `Bearer ${ownerToken}` },
     });
     assert.strictEqual(ownerRes.status, 200);
-    const dashData = await ownerRes.json();
+    const dashData: any = await ownerRes.json();
     assert.ok(dashData.todaySalesPaise > 0);
     assert.strictEqual(dashData.isStale, false);
   });
@@ -281,7 +281,7 @@ describe('ALGIONS Pharmacy - API Integration & Business Rules Tests', () => {
       headers: { Authorization: `Bearer ${staffToken}` },
     });
     assert.strictEqual(listRes.status, 200);
-    const listData = await listRes.json();
+    const listData: any = await listRes.json();
     const cust = listData.customers[0];
     assert.ok(cust);
 
@@ -331,7 +331,7 @@ describe('ALGIONS Pharmacy - API Integration & Business Rules Tests', () => {
       headers: { Authorization: `Bearer ${ownerToken}` },
     });
     assert.strictEqual(listRes.status, 200);
-    const listData = await listRes.json();
+    const listData: any = await listRes.json();
     const supp = listData.suppliers[0];
     assert.ok(supp);
 
@@ -409,7 +409,7 @@ describe('ALGIONS Pharmacy - API Integration & Business Rules Tests', () => {
     const suppsRes = await fetch(`${baseUrl}/suppliers`, {
       headers: { Authorization: `Bearer ${ownerToken}` },
     });
-    const suppsData = await suppsRes.json();
+    const suppsData: any = await suppsRes.json();
     const supp = suppsData.suppliers[0];
     assert.ok(supp);
 
@@ -458,7 +458,7 @@ describe('ALGIONS Pharmacy - API Integration & Business Rules Tests', () => {
       }),
     });
     assert.strictEqual(validReturnRes.status, 201);
-    const returnData = await validReturnRes.json();
+    const returnData: any = await validReturnRes.json();
     assert.strictEqual(returnData.success, true);
     assert.ok(returnData.debitNoteNumber);
 
@@ -467,7 +467,7 @@ describe('ALGIONS Pharmacy - API Integration & Business Rules Tests', () => {
       headers: { Authorization: `Bearer ${staffToken}` },
     });
     assert.strictEqual(listRes.status, 200);
-    const listData = await listRes.json();
+    const listData: any = await listRes.json();
     assert.ok(listData.debitNotes.some((dn: any) => dn.id === returnData.id));
   });
 
@@ -484,7 +484,7 @@ describe('ALGIONS Pharmacy - API Integration & Business Rules Tests', () => {
       }),
     });
     assert.strictEqual(recallRes.status, 200);
-    const recallData = await recallRes.json();
+    const recallData: any = await recallRes.json();
     assert.strictEqual(recallData.isRecalled, true);
 
     // 2. Attempt POS checkout with recalled batch -> 400 BATCH_RECALLED
@@ -512,7 +512,7 @@ describe('ALGIONS Pharmacy - API Integration & Business Rules Tests', () => {
       }),
     });
     assert.strictEqual(checkoutRes.status, 400);
-    const checkoutErr = await checkoutRes.json();
+    const checkoutErr: any = await checkoutRes.json();
     assert.strictEqual(checkoutErr.code, 'BATCH_RECALLED');
 
     // 3. Query recall impact & customer contact trace -> 200
@@ -520,7 +520,7 @@ describe('ALGIONS Pharmacy - API Integration & Business Rules Tests', () => {
       headers: { Authorization: `Bearer ${staffToken}` },
     });
     assert.strictEqual(impactRes.status, 200);
-    const impactData = await impactRes.json();
+    const impactData: any = await impactRes.json();
     assert.strictEqual(impactData.batch.isRecalled, true);
     assert.ok(Array.isArray(impactData.impactedInvoices));
 
@@ -544,7 +544,7 @@ describe('ALGIONS Pharmacy - API Integration & Business Rules Tests', () => {
       headers: { Authorization: `Bearer ${ownerToken}` },
     });
     assert.strictEqual(ownerDocRes.status, 200);
-    const docData = await ownerDocRes.json();
+    const docData: any = await ownerDocRes.json();
     assert.ok(Array.isArray(docData.doctors));
     assert.strictEqual(typeof docData.totalPrescriptions, 'number');
   });
