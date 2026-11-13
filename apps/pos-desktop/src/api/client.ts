@@ -4,7 +4,7 @@ import {
   StoreStatusResponse,
 } from '@algions/contracts';
 
-const API_BASE_URL = 'http://localhost:3001';
+const API_BASE_URL = (import.meta.env?.VITE_API_URL as string) || 'http://localhost:3001';
 
 export class ApiClient {
   private token: string | null = null;
