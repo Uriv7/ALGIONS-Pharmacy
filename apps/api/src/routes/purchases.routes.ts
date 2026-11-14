@@ -9,9 +9,14 @@ import { AppError } from '../middleware/error.js';
 import { generateUUIDv7 } from '@algions/domain';
 
 export const purchasesRouter = Router();
+export const suppliersRouter = Router();
+
+// ============================================================================
+// SUPPLIERS MODULE (Mounted at /suppliers, also accessible via /purchases/suppliers)
+// ============================================================================
 
 // GET /suppliers
-purchasesRouter.get(['/suppliers', '/'], authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
+suppliersRouter.get('/', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const storeId = req.user!.storeId;
     const suppliers = await req.db.query(
@@ -34,7 +39,7 @@ purchasesRouter.get(['/suppliers', '/'], authenticateToken, async (req: Request,
 });
 
 // POST /suppliers (Owner only)
-purchasesRouter.post(['/suppliers', '/'], authenticateToken, requireOwner, async (req: Request, res: Response, next: NextFunction) => {
+suppliersRouter.post('/', authenticateToken, requireOwner, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const body = SupplierSchema.parse(req.body);
     const storeId = req.user!.storeId;
@@ -64,7 +69,7 @@ purchasesRouter.post(['/suppliers', '/'], authenticateToken, requireOwner, async
 });
 
 // PUT /suppliers/:id (Owner only supplier edit - PUR-001)
-purchasesRouter.put(['/suppliers/:id', '/:id'], authenticateToken, requireOwner, async (req: Request, res: Response, next: NextFunction) => {
+suppliersRouter.put('/:id', authenticateToken, requireOwner, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const supplierId = Array.isArray(req.params.id) ? req.params.id[0]! : req.params.id!;
     const storeId = req.user!.storeId;
@@ -110,7 +115,7 @@ purchasesRouter.put(['/suppliers/:id', '/:id'], authenticateToken, requireOwner,
 });
 
 // POST /suppliers/:id/payments (Record supplier payment - PUR-008, ACC-003)
-purchasesRouter.post(['/suppliers/:id/payments', '/:id/payments'], authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
+suppliersRouter.post('/:id/payments', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const supplierId = Array.isArray(req.params.id) ? req.params.id[0]! : req.params.id!;
     const { amountPaise, mode, notes } = req.body;
@@ -185,6 +190,13 @@ purchasesRouter.post(['/suppliers/:id/payments', '/:id/payments'], authenticateT
     next(err);
   }
 });
+
+// Mount suppliers sub-router on purchasesRouter for backwards compatibility
+purchasesRouter.use('/suppliers', suppliersRouter);
+
+// ============================================================================
+// PURCHASES & INWARD GOODS (Mounted at /purchases)
+// ============================================================================
 
 // POST /purchases
 purchasesRouter.post('/', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {

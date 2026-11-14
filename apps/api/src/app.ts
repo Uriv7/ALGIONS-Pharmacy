@@ -6,7 +6,7 @@ import { authRouter } from './routes/auth.routes.js';
 import { storeRouter } from './routes/store.routes.js';
 import { productsRouter } from './routes/products.routes.js';
 import { posRouter } from './routes/pos.routes.js';
-import { purchasesRouter } from './routes/purchases.routes.js';
+import { purchasesRouter, suppliersRouter } from './routes/purchases.routes.js';
 import { inventoryRouter } from './routes/inventory.routes.js';
 import { accountingRouter } from './routes/accounting.routes.js';
 import { syncRouter } from './routes/sync.routes.js';
@@ -55,7 +55,7 @@ export function createApp(db?: IDatabase): express.Express {
   app.use('/pos', posRouter);
   app.use('/returns', posRouter);
   app.use('/purchases', purchasesRouter);
-  app.use('/suppliers', purchasesRouter);
+  app.use('/suppliers', suppliersRouter);
   app.use(['/stock', '/inventory'], inventoryRouter);
   app.use('/accounting', accountingRouter);
   app.use('/gst', accountingRouter);

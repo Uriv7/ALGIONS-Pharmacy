@@ -57,7 +57,12 @@ export class ApiClient {
       } catch {
         errData = { detail: res.statusText, code: 'HTTP_ERROR' };
       }
-      const error: any = new Error(errData.detail || 'Request failed');
+      let detail = errData.detail || 'Request failed';
+      if (errData.invalidParams && Array.isArray(errData.invalidParams) && errData.invalidParams.length > 0) {
+        const paramDetails = errData.invalidParams.map((p: any) => `${p.field}: ${p.message}`).join(', ');
+        detail += ` (${paramDetails})`;
+      }
+      const error: any = new Error(detail);
       error.code = errData.code;
       error.status = res.status;
       error.details = errData;
