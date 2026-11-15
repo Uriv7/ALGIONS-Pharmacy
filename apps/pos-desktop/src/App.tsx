@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { TopBar } from './components/TopBar.js';
 import { NavigationRail, ActiveScreen } from './components/NavigationRail.js';
 import { POSScreen } from './screens/POSScreen.js';
@@ -23,7 +23,19 @@ import { FullWidthBanner } from '@algions/ui';
 import { api } from './api/client.js';
 import { offlineEngine } from './offline/engine.js';
 import { AuthSessionUser } from '@algions/contracts';
-import { LogIn, KeyRound, ShieldCheck, User, Sparkles } from 'lucide-react';
+import {
+  LogIn,
+  KeyRound,
+  ShieldCheck,
+  User,
+  Sparkles,
+  RefreshCw,
+  AlertTriangle,
+  CheckCircle2,
+  Server,
+  Clock,
+  Activity,
+} from 'lucide-react';
 
 export const App: React.FC = () => {
   const [user, setUser] = useState<AuthSessionUser | null>(null);
@@ -43,11 +55,62 @@ export const App: React.FC = () => {
   const [mfaToken, setMfaToken] = useState<string>('');
   const [mfaCode, setMfaCode] = useState<string>('');
 
+  // Backend health & Render cold-start indicator state
+  type BackendStatus = 'CHECKING' | 'WAKING_UP' | 'ONLINE' | 'OFFLINE';
+  const [backendStatus, setBackendStatus] = useState<BackendStatus>('CHECKING');
+  const [backendLatency, setBackendLatency] = useState<number | null>(null);
+  const [backendError, setBackendError] = useState<string | null>(null);
+  const [wakeSeconds, setWakeSeconds] = useState<number>(0);
+  const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
+  const [loginSeconds, setLoginSeconds] = useState<number>(0);
+  const [isVerifyingMfa, setIsVerifyingMfa] = useState<boolean>(false);
+
   // Reprint Dialog
   const [reprintInvoice, setReprintInvoice] = useState<any | null>(null);
 
-  // Initial load
+  // Ping Backend Health (detects Render cold starts)
+  const checkBackendHealth = useCallback(async () => {
+    setBackendError(null);
+    const start = Date.now();
+
+    // Start timer that increments every second; if >= 3s, flag as WAKING_UP
+    const wakeInterval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - start) / 1000);
+      setWakeSeconds(elapsed);
+      if (elapsed >= 3) {
+        setBackendStatus((curr) => (curr === 'ONLINE' ? 'ONLINE' : 'WAKING_UP'));
+      }
+    }, 1000);
+
+    try {
+      const res = await api.checkHealth();
+      clearInterval(wakeInterval);
+      if (res.status === 'ok') {
+        setBackendStatus('ONLINE');
+        setBackendLatency(res.latencyMs);
+        if (res.storeName) {
+          setStoreStatus((prev: any) => ({
+            ...prev,
+            name: res.storeName,
+            activeMode: res.activeMode || 'ONLINE',
+          }));
+        }
+      } else {
+        setBackendStatus('OFFLINE');
+        setBackendError(res.error || 'Server error');
+      }
+    } catch (err: any) {
+      clearInterval(wakeInterval);
+      setBackendStatus('OFFLINE');
+      setBackendError(err.message || 'Cannot reach server');
+    }
+  }, []);
+
+  // Initial load & health polling
   useEffect(() => {
+    // Check health immediately on mount
+    checkBackendHealth();
+
     const initStore = async () => {
       try {
         const status = await api.getStoreStatus();
@@ -60,7 +123,7 @@ export const App: React.FC = () => {
 
     // Heartbeat every 15s per TAD Section 6
     const heartbeatTimer = setInterval(async () => {
-      if (!isOffline) {
+      if (!isOffline && user) {
         try {
           await api.sendHeartbeat(Date.now());
         } catch {
@@ -70,14 +133,35 @@ export const App: React.FC = () => {
     }, 15000);
 
     return () => clearInterval(heartbeatTimer);
-  }, [isOffline]);
+  }, [isOffline, user, checkBackendHealth]);
+
+  // Periodic health check while on Auth screen
+  useEffect(() => {
+    if (user) return;
+    const pollInterval = setInterval(() => {
+      checkBackendHealth();
+    }, backendStatus === 'ONLINE' ? 30000 : 7000);
+
+    return () => clearInterval(pollInterval);
+  }, [user, backendStatus, checkBackendHealth]);
 
   // Handle Login
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError(null);
+    setIsLoggingIn(true);
+    setLoginSeconds(0);
+
+    const loginStartTime = Date.now();
+    const loginTimer = setInterval(() => {
+      setLoginSeconds(Math.floor((Date.now() - loginStartTime) / 1000));
+    }, 1000);
+
     try {
       const res = await api.login(username, password);
+      clearInterval(loginTimer);
+      setIsLoggingIn(false);
+      setBackendStatus('ONLINE');
       if (res.requiresMfa) {
         setRequiresMfa(true);
         setMfaToken(res.tempToken || '');
@@ -87,18 +171,37 @@ export const App: React.FC = () => {
         setActiveScreen(res.user.accountType === 'OWNER' ? 'DASHBOARD' : 'POS');
       }
     } catch (err: any) {
-      setLoginError(err.message || 'Login failed. Check credentials.');
+      clearInterval(loginTimer);
+      setIsLoggingIn(false);
+      const isNetwork =
+        err.message?.toLowerCase().includes('failed to fetch') ||
+        err.message?.toLowerCase().includes('network') ||
+        err.message?.toLowerCase().includes('timeout') ||
+        err.message?.toLowerCase().includes('abort');
+
+      if (isNetwork || backendStatus !== 'ONLINE') {
+        setLoginError(
+          'Could not reach the server. The Render cloud instance is likely waking up from sleep mode (~30-50s). Please wait for the status indicator above to show Online and try again.'
+        );
+        checkBackendHealth();
+      } else {
+        setLoginError(err.message || 'Login failed. Check credentials.');
+      }
     }
   };
 
   const handleMfaSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsVerifyingMfa(true);
+    setLoginError(null);
     try {
       const res = await api.verifyMfa(mfaToken, mfaCode);
+      setIsVerifyingMfa(false);
       setUser(res.user);
       setRequiresMfa(false);
       setActiveScreen('DASHBOARD');
     } catch (err: any) {
+      setIsVerifyingMfa(false);
       setLoginError(err.message || 'Invalid MFA Code.');
     }
   };
@@ -131,14 +234,105 @@ export const App: React.FC = () => {
   if (!user) {
     return (
       <div className="h-screen w-screen bg-slate-900 flex items-center justify-center p-4 select-none">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-sm border border-slate-100">
+        <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md border border-slate-100">
           <div className="w-12 h-12 bg-teal-600 rounded-xl flex items-center justify-center text-white font-black text-xl mx-auto mb-4 shadow-md">
             A
           </div>
           <h1 className="text-xl font-bold text-center text-slate-800">ALGIONS Pharmacy</h1>
-          <p className="text-xs text-center text-slate-500 mt-1 mb-6">
+          <p className="text-xs text-center text-slate-500 mt-1 mb-4">
             Sign in to start counter billing session
           </p>
+
+          {/* Live Backend Health & Render Cold-Start Indicator */}
+          <div className="mb-4">
+            {backendStatus === 'ONLINE' && (
+              <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-xs text-emerald-800">
+                <div className="flex items-center gap-2">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                  </span>
+                  <div>
+                    <span className="font-bold text-[11px] text-emerald-900">Cloud API Online</span>
+                    <span className="text-[10px] text-emerald-600 block">
+                      {storeStatus?.name || 'ALGIONS Pharmacy Cloud'} • Ready
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {backendLatency !== null && (
+                    <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-mono font-medium">
+                      {backendLatency}ms
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={checkBackendHealth}
+                    title="Refresh server status"
+                    className="p-1 hover:bg-emerald-100 rounded text-emerald-700 transition"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {backendStatus === 'WAKING_UP' && (
+              <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-xs text-amber-900 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <RefreshCw className="w-4 h-4 text-amber-600 animate-spin" />
+                    <span className="font-bold text-amber-900">Waking Up Cloud Server...</span>
+                  </div>
+                  <span className="text-[11px] font-mono font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    {wakeSeconds}s
+                  </span>
+                </div>
+                <p className="text-[11px] text-amber-700 leading-relaxed">
+                  Render free instances spin down after inactivity. The backend is spinning up (takes ~30–50s). Please wait...
+                </p>
+                <div className="w-full bg-amber-200 h-1.5 rounded-full overflow-hidden">
+                  <div
+                    className="bg-amber-600 h-full rounded-full transition-all duration-1000"
+                    style={{ width: `${Math.min(100, Math.round((wakeSeconds / 45) * 100))}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {backendStatus === 'CHECKING' && (
+              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs text-slate-600">
+                <div className="flex items-center gap-2">
+                  <Activity className="w-3.5 h-3.5 text-teal-600 animate-pulse" />
+                  <span className="text-[11px]">Connecting to Cloud API...</span>
+                </div>
+                <RefreshCw className="w-3.5 h-3.5 text-slate-400 animate-spin" />
+              </div>
+            )}
+
+            {backendStatus === 'OFFLINE' && (
+              <div className="p-2.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                    <span className="font-bold text-[11px]">Cloud Server Offline / Sleeping</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={checkBackendHealth}
+                    className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded font-bold text-[10px] flex items-center gap-1 shadow-sm transition"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>Wake Server</span>
+                  </button>
+                </div>
+                <p className="text-[10px] text-red-600 leading-snug">
+                  If the server hasn't been accessed recently, clicking "Wake Server" will initiate Render boot.
+                </p>
+              </div>
+            )}
+          </div>
 
           {loginError && (
             <div className="mb-4 p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs font-semibold text-red-700">
@@ -240,15 +434,50 @@ export const App: React.FC = () => {
               <div className="pt-2">
                 <button
                   type="submit"
-                  className="w-full py-2.5 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white font-bold rounded-lg text-xs shadow-md transition flex items-center justify-center gap-1.5"
+                  disabled={isLoggingIn}
+                  className={`w-full py-2.5 font-bold rounded-lg text-xs shadow-md transition flex items-center justify-center gap-1.5 ${
+                    isLoggingIn
+                      ? 'bg-teal-700 text-white cursor-wait opacity-90'
+                      : 'bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white'
+                  }`}
                 >
-                  <LogIn className="w-4 h-4" />
-                  <span>Sign In as {username === 'owner' ? 'Owner' : 'Staff'}</span>
+                  {isLoggingIn ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>
+                        {loginSeconds > 2
+                          ? `Waking Server & Authenticating (${loginSeconds}s)...`
+                          : 'Signing In...'}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <LogIn className="w-4 h-4" />
+                      <span>Sign In as {username === 'owner' ? 'Owner' : 'Staff'}</span>
+                    </>
+                  )}
                 </button>
               </div>
 
-              <div className="pt-2 border-t border-slate-100 text-[10px] text-slate-400 text-center">
-                Demo Credentials: <span className="font-semibold text-slate-600">owner</span> (MFA 123456) • <span className="font-semibold text-slate-600">staff1</span> (PIN 1234)
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
+                <span className="flex items-center gap-1 truncate max-w-[240px]">
+                  <Server className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                  <span className="truncate" title={api.getBaseUrl()}>
+                    {api.getBaseUrl()}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={checkBackendHealth}
+                  className="text-teal-600 hover:text-teal-800 font-semibold flex items-center gap-0.5 ml-2 flex-shrink-0"
+                >
+                  <RefreshCw className="w-2.5 h-2.5" />
+                  <span>Ping</span>
+                </button>
+              </div>
+
+              <div className="text-[10px] text-slate-400 text-center">
+                Demo: <span className="font-semibold text-slate-600">owner</span> (MFA 123456) • <span className="font-semibold text-slate-600">staff1</span> (PIN 1234)
               </div>
             </form>
           ) : (
@@ -276,10 +505,24 @@ export const App: React.FC = () => {
               </button>
               <button
                 type="submit"
-                className="w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg text-xs shadow transition flex items-center justify-center gap-1.5"
+                disabled={isVerifyingMfa}
+                className={`w-full py-2.5 font-bold rounded-lg text-xs shadow transition flex items-center justify-center gap-1.5 ${
+                  isVerifyingMfa
+                    ? 'bg-teal-700 text-white cursor-wait opacity-90'
+                    : 'bg-teal-600 hover:bg-teal-700 text-white'
+                }`}
               >
-                <KeyRound className="w-4 h-4" />
-                <span>Verify & Enter</span>
+                {isVerifyingMfa ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Verifying Code...</span>
+                  </>
+                ) : (
+                  <>
+                    <KeyRound className="w-4 h-4" />
+                    <span>Verify & Enter</span>
+                  </>
+                )}
               </button>
               <button
                 type="button"

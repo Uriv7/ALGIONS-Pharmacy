@@ -35,6 +35,41 @@ export class ApiClient {
     localStorage.setItem('algions_pos_device_id', id);
   }
 
+  getBaseUrl(): string {
+    return API_BASE_URL;
+  }
+
+  async checkHealth(): Promise<{ status: 'ok' | 'unhealthy' | 'unreachable'; storeName?: string; activeMode?: string; latencyMs: number; error?: string }> {
+    const start = performance.now();
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 65000); // allow up to 65s for Render cold start
+      const res = await fetch(`${API_BASE_URL}/health`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      const latencyMs = Math.round(performance.now() - start);
+      if (!res.ok) {
+        return { status: 'unhealthy', latencyMs, error: `HTTP ${res.status}` };
+      }
+      const data = await res.json();
+      return {
+        status: data.status === 'ok' ? 'ok' : 'unhealthy',
+        storeName: data.storeName,
+        activeMode: data.activeMode,
+        latencyMs,
+      };
+    } catch (err: any) {
+      return {
+        status: 'unreachable',
+        latencyMs: Math.round(performance.now() - start),
+        error: err.name === 'AbortError' ? 'Connection timed out' : (err.message || 'Cannot reach server'),
+      };
+    }
+  }
+
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
